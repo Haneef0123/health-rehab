@@ -174,7 +174,12 @@ export default function ExercisesPage() {
             Safe rehabilitation exercises for cervical spine recovery
           </p>
         </div>
-        <Button className="gap-2">
+        <Button
+          className="gap-2"
+          onClick={() =>
+            (window.location.href = "/dashboard/exercises/routines")
+          }
+        >
           <Plus className="h-4 w-4" />
           Create Routine
         </Button>
@@ -339,8 +344,7 @@ export default function ExercisesPage() {
                   size="sm"
                   className="flex-1 gap-2"
                   onClick={() => {
-                    // TODO: Navigate to exercise detail or start single exercise
-                    console.log("Start exercise:", exercise.id);
+                    window.location.href = `/dashboard/exercises/${exercise.id}`;
                   }}
                 >
                   <Play className="h-4 w-4" />
@@ -350,8 +354,7 @@ export default function ExercisesPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    // TODO: View exercise details
-                    console.log("View details:", exercise.id);
+                    window.location.href = `/dashboard/exercises/${exercise.id}`;
                   }}
                 >
                   Details
