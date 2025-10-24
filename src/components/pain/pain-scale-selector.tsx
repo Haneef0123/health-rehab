@@ -51,7 +51,7 @@ export function PainScaleSelector({
               onMouseEnter={() => setHoveredLevel(numLevel)}
               onMouseLeave={() => setHoveredLevel(null)}
               className={cn(
-                "relative flex aspect-square flex-col items-center justify-center rounded-xl text-sm font-semibold transition-all",
+                "cursor-pointer relative flex aspect-square flex-col items-center justify-center rounded-xl text-sm font-semibold transition-all",
                 "hover:scale-110 hover:shadow-lg",
                 isSelected &&
                   "scale-110 shadow-lg ring-4 ring-white ring-offset-2"

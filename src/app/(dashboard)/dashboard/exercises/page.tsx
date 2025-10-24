@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -11,7 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { useExerciseStore } from "@/stores";
+import { useExerciseStore, useUserStore } from "@/stores";
+import { toast } from "@/hooks/use-toast";
+import { USER_ID_FALLBACK } from "@/lib/constants";
 import {
   Play,
   Clock,
@@ -20,6 +22,8 @@ import {
   Search,
   Filter,
   Plus,
+  Loader2,
+  Calendar,
 } from "lucide-react";
 
 // Mock exercise data - will be replaced with actual data from store/API
@@ -128,7 +132,61 @@ export default function ExercisesPage() {
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(
     null
   );
-  const { activeSession, startSession } = useExerciseStore();
+  const [isLoading, setIsLoading] = useState(true);
+
+  const { user } = useUserStore();
+  const { exercises, sessions, activeSession, fetchExercises, startSession } =
+    useExerciseStore();
+
+  // Load exercises on mount
+  useEffect(() => {
+    const loadExercises = async () => {
+      setIsLoading(true);
+      try {
+        await fetchExercises();
+      } catch (error) {
+        toast({
+          variant: "error",
+          title: "Error",
+          description: "Failed to load exercises",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadExercises();
+  }, [fetchExercises]);
+
+  // Calculate last performed date for each exercise
+  const exerciseStats = useMemo(() => {
+    const stats: Record<
+      string,
+      { lastPerformed: Date | null; totalSessions: number }
+    > = {};
+
+    exercises.forEach((exercise) => {
+      const exerciseSessions = sessions.filter((session) =>
+        session.completed.some(
+          (completion) =>
+            completion.exerciseId === exercise.id && completion.completed
+        )
+      );
+
+      stats[exercise.id] = {
+        lastPerformed:
+          exerciseSessions.length > 0
+            ? new Date(
+                Math.max(
+                  ...exerciseSessions.map((s) => new Date(s.date).getTime())
+                )
+              )
+            : null,
+        totalSessions: exerciseSessions.length,
+      };
+    });
+
+    return stats;
+  }, [exercises, sessions]);
 
   const categories = [
     "stretching",
@@ -139,17 +197,19 @@ export default function ExercisesPage() {
   ];
   const difficulties = ["beginner", "intermediate", "advanced"];
 
-  const filteredExercises = MOCK_EXERCISES.filter((exercise) => {
-    const matchesSearch =
-      exercise.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      exercise.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory =
-      !selectedCategory || exercise.category === selectedCategory;
-    const matchesDifficulty =
-      !selectedDifficulty || exercise.difficulty === selectedDifficulty;
+  const filteredExercises = useMemo(() => {
+    return exercises.filter((exercise) => {
+      const matchesSearch =
+        exercise.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        exercise.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory =
+        !selectedCategory || exercise.category === selectedCategory;
+      const matchesDifficulty =
+        !selectedDifficulty || exercise.difficulty === selectedDifficulty;
 
-    return matchesSearch && matchesCategory && matchesDifficulty;
-  });
+      return matchesSearch && matchesCategory && matchesDifficulty;
+    });
+  }, [exercises, searchQuery, selectedCategory, selectedDifficulty]);
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -174,7 +234,12 @@ export default function ExercisesPage() {
             Safe rehabilitation exercises for cervical spine recovery
           </p>
         </div>
-        <Button className="gap-2">
+        <Button
+          className="gap-2"
+          onClick={() =>
+            (window.location.href = "/dashboard/exercises/routines")
+          }
+        >
           <Plus className="h-4 w-4" />
           Create Routine
         </Button>
@@ -263,107 +328,127 @@ export default function ExercisesPage() {
       </div>
 
       {/* Exercise Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredExercises.map((exercise) => (
-          <Card
-            key={exercise.id}
-            className="group transition-all hover:shadow-lg"
-          >
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-lg">{exercise.name}</CardTitle>
-                  <CardDescription className="mt-1">
-                    {exercise.description}
-                  </CardDescription>
-                </div>
-                <Badge
-                  variant={getDifficultyColor(exercise.difficulty) as any}
-                  className="ml-2 flex-shrink-0"
-                >
-                  {exercise.difficulty}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Stats */}
-              <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-                {exercise.duration && (
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    <span>
-                      {Math.floor(exercise.duration / 60)}m{" "}
-                      {exercise.duration % 60}s
-                    </span>
-                  </div>
-                )}
-                {exercise.repetitions && (
-                  <div className="flex items-center gap-1">
-                    <Target className="h-4 w-4" />
-                    <span>{exercise.repetitions} reps</span>
-                  </div>
-                )}
-                {exercise.sets && <span>× {exercise.sets} sets</span>}
-              </div>
-
-              {/* Target Areas */}
-              <div>
-                <p className="mb-2 text-xs font-medium text-gray-700">
-                  Target Areas:
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {exercise.targetAreas.map((area) => (
-                    <Badge key={area} variant="outline" className="text-xs">
-                      {area}
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredExercises.map((exercise) => {
+            const stats = exerciseStats[exercise.id];
+            return (
+              <Card
+                key={exercise.id}
+                className="group transition-all hover:shadow-lg"
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg">{exercise.name}</CardTitle>
+                      <CardDescription className="mt-1">
+                        {exercise.description}
+                      </CardDescription>
+                    </div>
+                    <Badge
+                      variant={getDifficultyColor(exercise.difficulty) as any}
+                      className="ml-2 flex-shrink-0"
+                    >
+                      {exercise.difficulty}
                     </Badge>
-                  ))}
-                </div>
-              </div>
-
-              {/* Warnings */}
-              {exercise.contraindications.length > 0 && (
-                <div className="rounded-lg bg-warning-50 p-2">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 flex-shrink-0 text-warning-600" />
-                    <p className="text-xs text-warning-800">
-                      Not for: {exercise.contraindications.join(", ")}
-                    </p>
                   </div>
-                </div>
-              )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Stats */}
+                  <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                    {exercise.duration && (
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        <span>
+                          {Math.floor(exercise.duration / 60)}m{" "}
+                          {exercise.duration % 60}s
+                        </span>
+                      </div>
+                    )}
+                    {exercise.repetitions && (
+                      <div className="flex items-center gap-1">
+                        <Target className="h-4 w-4" />
+                        <span>{exercise.repetitions} reps</span>
+                      </div>
+                    )}
+                    {exercise.sets && <span>× {exercise.sets} sets</span>}
+                  </div>
 
-              {/* Actions */}
-              <div className="flex gap-2 pt-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="flex-1 gap-2"
-                  onClick={() => {
-                    // TODO: Navigate to exercise detail or start single exercise
-                    console.log("Start exercise:", exercise.id);
-                  }}
-                >
-                  <Play className="h-4 w-4" />
-                  Start
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    // TODO: View exercise details
-                    console.log("View details:", exercise.id);
-                  }}
-                >
-                  Details
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  {/* Last Performed */}
+                  {stats?.lastPerformed && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Calendar className="h-3 w-3" />
+                      <span>
+                        Last performed:{" "}
+                        {new Date(stats.lastPerformed).toLocaleDateString()}
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span>{stats.totalSessions} sessions</span>
+                    </div>
+                  )}
+
+                  {/* Target Areas */}
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-gray-700">
+                      Target Areas:
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {exercise.targetAreas.map((area) => (
+                        <Badge key={area} variant="outline" className="text-xs">
+                          {area}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Warnings */}
+                  {exercise.contraindications.length > 0 && (
+                    <div className="rounded-lg bg-warning-50 p-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 flex-shrink-0 text-warning-600" />
+                        <p className="text-xs text-warning-800">
+                          Not for: {exercise.contraindications.join(", ")}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="flex-1 gap-2"
+                      onClick={() => {
+                        window.location.href = `/dashboard/exercises/${exercise.id}`;
+                      }}
+                    >
+                      <Play className="h-4 w-4" />
+                      Start
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        window.location.href = `/dashboard/exercises/${exercise.id}`;
+                      }}
+                    >
+                      Details
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Empty State */}
-      {filteredExercises.length === 0 && (
+      {!isLoading && filteredExercises.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">

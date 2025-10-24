@@ -7,6 +7,7 @@ interface PainState {
   currentPainLevel: number;
   analytics: PainAnalytics | null;
   isLoading: boolean;
+  isHydrated: boolean;
   error: string | null;
 
   // Actions
@@ -25,6 +26,7 @@ export const usePainStore = create<PainState>((set, get) => ({
   currentPainLevel: 0,
   analytics: null,
   isLoading: false,
+  isHydrated: false,
   error: null,
 
   // Add pain log
@@ -138,12 +140,14 @@ export const usePainStore = create<PainState>((set, get) => ({
       set({
         logs,
         isLoading: false,
+        isHydrated: true,
       });
     } catch (error) {
       set({
         error:
           error instanceof Error ? error.message : "Failed to fetch pain logs",
         isLoading: false,
+        isHydrated: true,
       });
     }
   },

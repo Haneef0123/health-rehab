@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PainScaleSelector } from "./pain-scale-selector";
-import { usePainStore } from "@/stores";
+import { usePainStore, useUserStore } from "@/stores";
+import { USER_ID_FALLBACK } from "@/lib/constants";
 import { X } from "lucide-react";
 
 const painLogSchema = z.object({
@@ -59,6 +60,7 @@ const COMMON_TRIGGERS = [
 
 export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
   const { addLog } = usePainStore();
+  const { user } = useUserStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
@@ -113,7 +115,7 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
     setIsSubmitting(true);
     try {
       await addLog({
-        userId: "user-1", // Single user
+        userId: user?.id ?? USER_ID_FALLBACK,
         level: data.level,
         location: data.location as any[], // Type assertion for now
         type: data.type as any[], // Type assertion for now

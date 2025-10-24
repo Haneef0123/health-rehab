@@ -13,6 +13,7 @@ interface ExerciseState {
   sessions: ExerciseSession[];
   activeSession: ExerciseSession | null;
   isLoading: boolean;
+  isHydrated: boolean;
   error: string | null;
 
   // Actions
@@ -39,6 +40,7 @@ export const useExerciseStore = create<ExerciseState>((set, get) => ({
   sessions: [],
   activeSession: null,
   isLoading: false,
+  isHydrated: false,
   error: null,
 
   // Fetch exercises
@@ -62,12 +64,14 @@ export const useExerciseStore = create<ExerciseState>((set, get) => ({
       set({
         exercises,
         isLoading: false,
+        isHydrated: true,
       });
     } catch (error) {
       set({
         error:
           error instanceof Error ? error.message : "Failed to fetch exercises",
         isLoading: false,
+        isHydrated: true,
       });
     }
   },
@@ -89,12 +93,14 @@ export const useExerciseStore = create<ExerciseState>((set, get) => ({
       set({
         routines,
         isLoading: false,
+        isHydrated: true,
       });
     } catch (error) {
       set({
         error:
           error instanceof Error ? error.message : "Failed to fetch routines",
         isLoading: false,
+        isHydrated: true,
       });
     }
   },

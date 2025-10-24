@@ -6,6 +6,7 @@ interface UserState {
   // State
   user: User | null;
   isLoading: boolean;
+  isHydrated: boolean;
   error: string | null;
 
   // Actions
@@ -73,11 +74,12 @@ export const useUserStore = create<UserState>()(
       // Initial state
       user: null,
       isLoading: false,
+      isHydrated: false,
       error: null,
 
       // Set user (initial load)
       setUser: (user: User) => {
-        set({ user, error: null });
+        set({ user, error: null, isHydrated: true });
       },
 
       // Update user
@@ -141,9 +143,9 @@ export const useUserStore = create<UserState>()(
 
           // If no user exists, use default
           if (!currentUser) {
-            set({ user: DEFAULT_USER, isLoading: false });
+            set({ user: DEFAULT_USER, isLoading: false, isHydrated: true });
           } else {
-            set({ isLoading: false });
+            set({ isLoading: false, isHydrated: true });
           }
         } catch (error) {
           set({
@@ -152,6 +154,7 @@ export const useUserStore = create<UserState>()(
                 ? error.message
                 : "Failed to initialize user",
             isLoading: false,
+            isHydrated: true,
           });
         }
       },

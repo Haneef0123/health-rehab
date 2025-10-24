@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -11,13 +11,126 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PainLogForm } from "@/components/pain/pain-log-form";
-import { usePainStore } from "@/stores";
-import { Plus, Calendar, TrendingDown, TrendingUp } from "lucide-react";
+import { usePainStore, useUserStore } from "@/stores";
+import { toast } from "@/hooks/use-toast";
+import { USER_ID_FALLBACK, DATE_RANGES } from "@/lib/constants";
+import {
+  Plus,
+  Calendar,
+  TrendingDown,
+  TrendingUp,
+  Loader2,
+  Edit,
+  Trash2,
+} from "lucide-react";
 import { PAIN_SCALE } from "@/types/pain";
+
+type DateRange = "week" | "month" | "all";
 
 export default function PainPage() {
   const [showForm, setShowForm] = useState(false);
-  const { logs, currentPainLevel } = usePainStore();
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange>("week");
+  const { user } = useUserStore();
+  const { logs, currentPainLevel, fetchLogs, deleteLog } = usePainStore();
+
+  // Initialize logs on mount
+  useEffect(() => {
+    const init = async () => {
+      setIsLoading(true);
+      try {
+        await fetchLogs();
+      } catch (error) {
+        toast({
+          variant: "error",
+          title: "Error",
+          description: "Failed to load pain logs",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    init();
+  }, [fetchLogs]);
+
+  // Filter logs by date range
+  const filteredLogs = useMemo(() => {
+    if (dateRange === "all") return logs;
+
+    const now = new Date();
+    const rangeStart = new Date();
+
+    if (dateRange === "week") {
+      rangeStart.setDate(now.getDate() - DATE_RANGES.WEEK);
+    } else if (dateRange === "month") {
+      rangeStart.setDate(now.getDate() - DATE_RANGES.MONTH);
+    }
+
+    return logs.filter((log) => new Date(log.timestamp) >= rangeStart);
+  }, [logs, dateRange]);
+
+  // Calculate statistics
+  const statistics = useMemo(() => {
+    if (filteredLogs.length === 0) {
+      return {
+        avgPain: 0,
+        painFreeDays: 0,
+        trend: 0,
+        trendDirection: "stable" as "improving" | "worsening" | "stable",
+      };
+    }
+
+    const avgPain =
+      filteredLogs.reduce((sum, log) => sum + log.level, 0) /
+      filteredLogs.length;
+
+    // Count pain-free days (pain level 0-2)
+    const painFreeDays = filteredLogs.filter((log) => log.level <= 2).length;
+
+    // Calculate trend (compare first half vs second half)
+    const midpoint = Math.floor(filteredLogs.length / 2);
+    if (midpoint > 0) {
+      const firstHalf = filteredLogs.slice(0, midpoint);
+      const secondHalf = filteredLogs.slice(midpoint);
+
+      const firstAvg =
+        firstHalf.reduce((sum, log) => sum + log.level, 0) / firstHalf.length;
+      const secondAvg =
+        secondHalf.reduce((sum, log) => sum + log.level, 0) / secondHalf.length;
+
+      const trend = ((firstAvg - secondAvg) / firstAvg) * 100;
+      const trendDirection =
+        trend > 5 ? "improving" : trend < -5 ? "worsening" : "stable";
+
+      return { avgPain, painFreeDays, trend, trendDirection };
+    }
+
+    return {
+      avgPain,
+      painFreeDays,
+      trend: 0,
+      trendDirection: "stable" as const,
+    };
+  }, [filteredLogs]);
+
+  // Handle delete log
+  const handleDeleteLog = async (logId: string) => {
+    try {
+      await deleteLog(logId);
+      toast({
+        variant: "success",
+        title: "Log Deleted",
+        description: "Pain log has been removed successfully",
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to delete pain log",
+      });
+    }
+  };
 
   const currentScale = PAIN_SCALE[currentPainLevel as keyof typeof PAIN_SCALE];
 
@@ -105,14 +218,56 @@ export default function PainPage() {
 
       {/* Pain Statistics */}
       <div className="grid gap-4 sm:grid-cols-3">
+        {/* Date Range Selector */}
+        <div className="sm:col-span-3 flex gap-2 justify-end">
+          <Button
+            variant={dateRange === "week" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateRange("week")}
+          >
+            Week
+          </Button>
+          <Button
+            variant={dateRange === "month" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateRange("month")}
+          >
+            Month
+          </Button>
+          <Button
+            variant={dateRange === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDateRange("all")}
+          >
+            All Time
+          </Button>
+        </div>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Average Pain</CardTitle>
             <TrendingDown className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">4.2/10</div>
-            <p className="text-xs text-gray-600">Last 7 days</p>
+            {isLoading ? (
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">
+                  {filteredLogs.length > 0
+                    ? statistics.avgPain.toFixed(1)
+                    : "0"}
+                  /10
+                </div>
+                <p className="text-xs text-gray-600">
+                  {dateRange === "week"
+                    ? "Last 7 days"
+                    : dateRange === "month"
+                    ? "Last 30 days"
+                    : "All time"}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -124,19 +279,58 @@ export default function PainPage() {
             <Calendar className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-gray-600">This week</p>
+            {isLoading ? (
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">
+                  {statistics.painFreeDays}
+                </div>
+                <p className="text-xs text-gray-600">
+                  {dateRange === "week"
+                    ? "This week"
+                    : dateRange === "month"
+                    ? "This month"
+                    : "All time"}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Trend</CardTitle>
-            <TrendingUp className="h-4 w-4 text-success-500" />
+            {statistics.trendDirection === "improving" ? (
+              <TrendingDown className="h-4 w-4 text-success-500" />
+            ) : statistics.trendDirection === "worsening" ? (
+              <TrendingUp className="h-4 w-4 text-error-500" />
+            ) : (
+              <TrendingDown className="h-4 w-4 text-gray-400" />
+            )}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success-600">-15%</div>
-            <p className="text-xs text-gray-600">Improving</p>
+            {isLoading ? (
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            ) : (
+              <>
+                <div
+                  className={`text-2xl font-bold ${
+                    statistics.trendDirection === "improving"
+                      ? "text-success-600"
+                      : statistics.trendDirection === "worsening"
+                      ? "text-error-600"
+                      : "text-gray-600"
+                  }`}
+                >
+                  {statistics.trend > 0 ? "+" : ""}
+                  {statistics.trend.toFixed(0)}%
+                </div>
+                <p className="text-xs text-gray-600 capitalize">
+                  {statistics.trendDirection}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -148,7 +342,11 @@ export default function PainPage() {
           <CardDescription>Your pain tracking history</CardDescription>
         </CardHeader>
         <CardContent>
-          {logs.length === 0 ? (
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : filteredLogs.length === 0 ? (
             <div className="py-12 text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
                 <Calendar className="h-8 w-8 text-gray-400" />
@@ -166,7 +364,7 @@ export default function PainPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {logs.slice(0, 10).map((log) => {
+              {filteredLogs.slice(0, 10).map((log) => {
                 const logScale =
                   PAIN_SCALE[log.level as keyof typeof PAIN_SCALE];
                 return (
@@ -214,6 +412,16 @@ export default function PainPage() {
                           {log.notes}
                         </p>
                       )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteLog(log.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 );
