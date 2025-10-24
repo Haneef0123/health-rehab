@@ -11,6 +11,10 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAlertDialog } from "@/components/ui/alert-dialog";
+import { useExerciseStore, useUserStore } from "@/stores";
+import { toast } from "@/hooks/use-toast";
+import { USER_ID_FALLBACK } from "@/lib/constants";
 import {
   Play,
   Pause,
@@ -20,107 +24,47 @@ import {
   CheckCircle,
   AlertTriangle,
   Heart,
+  Loader2,
 } from "lucide-react";
-import { useExerciseStore } from "@/stores";
-
-// Mock exercise data - same as detail page
-const MOCK_EXERCISES: Record<string, any> = {
-  "1": {
-    id: "1",
-    name: "Chin Tucks",
-    duration: 180,
-    repetitions: 10,
-    sets: 3,
-    instructions: [
-      "Sit or stand with your spine in a neutral position",
-      "Keep your eyes level and looking forward",
-      "Gently draw your chin straight back, creating a 'double chin'",
-      "Hold this position for 5 seconds",
-      "Return to starting position slowly",
-      "Rest for 3 seconds between repetitions",
-    ],
-  },
-  "2": {
-    id: "2",
-    name: "Wall Angels",
-    duration: 240,
-    repetitions: 12,
-    sets: 2,
-    instructions: [
-      "Stand with your back against a wall",
-      "Keep your feet about 6 inches away from the wall",
-      "Press your lower back, upper back, and head against the wall",
-      "Raise your arms to 90 degrees with elbows bent (goal post position)",
-      "Slowly slide your arms up the wall as high as comfortable",
-      "Slide back down to starting position",
-      "Keep all contact points touching the wall throughout",
-    ],
-  },
-  "3": {
-    id: "3",
-    name: "Cat-Cow Stretch",
-    duration: 120,
-    repetitions: 8,
-    sets: 2,
-    instructions: [
-      "Start on hands and knees (tabletop position)",
-      "Hands should be directly under shoulders, knees under hips",
-      "Inhale: Drop belly toward floor, lift chest and tailbone (Cow)",
-      "Look slightly upward, keeping neck long",
-      "Exhale: Round spine toward ceiling, tuck chin to chest (Cat)",
-      "Draw navel toward spine",
-      "Continue alternating between Cat and Cow with your breath",
-    ],
-  },
-  "4": {
-    id: "4",
-    name: "Doorway Chest Stretch",
-    duration: 180,
-    repetitions: undefined,
-    sets: 3,
-    instructions: [
-      "Stand in a doorway with feet shoulder-width apart",
-      "Place forearms on each side of the door frame",
-      "Elbows should be at 90 degrees, level with shoulders",
-      "Step forward with one foot until you feel a stretch in chest",
-      "Keep spine neutral and core engaged",
-      "Hold stretch for 30 seconds",
-      "Step back to release, rest 10 seconds, then repeat",
-    ],
-  },
-  "5": {
-    id: "5",
-    name: "Prone Cobra",
-    duration: 90,
-    repetitions: 8,
-    sets: 2,
-    instructions: [
-      "Lie face down on floor with arms at your sides",
-      "Legs should be straight and together",
-      "Rotate arms so thumbs point up toward ceiling",
-      "Squeeze shoulder blades together",
-      "Lift chest and arms off floor simultaneously",
-      "Keep neck neutral (look at floor)",
-      "Hold for 5-10 seconds",
-      "Lower down slowly with control",
-    ],
-  },
-};
 
 function ExerciseSessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { showAlert, AlertDialog } = useAlertDialog();
   const exerciseId = searchParams.get("exerciseId");
-  const { startSession, endSession, activeSession } = useExerciseStore();
+  const { user } = useUserStore();
+  const { exercises, startSession, endSession, activeSession, fetchExercises } =
+    useExerciseStore();
 
   const [isActive, setIsActive] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [currentSet, setCurrentSet] = useState(1);
   const [currentRep, setCurrentRep] = useState(1);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [painLevel, setPainLevel] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const exercise = exerciseId ? MOCK_EXERCISES[exerciseId] : null;
+  // Load exercises on mount
+  useEffect(() => {
+    const loadExercises = async () => {
+      setIsLoading(true);
+      try {
+        await fetchExercises();
+      } catch (error) {
+        toast({
+          variant: "error",
+          title: "Error",
+          description: "Failed to load exercise",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadExercises();
+  }, [fetchExercises]);
+
+  const exercise = exercises.find((ex) => ex.id === exerciseId);
 
   useEffect(() => {
     if (!exercise || activeSession) return;
@@ -140,11 +84,31 @@ function ExerciseSessionContent() {
   }, [isActive]);
 
   const handleToggleTimer = () => {
-    setIsActive(!isActive);
+    if (isActive) {
+      // Pausing
+      setIsActive(false);
+      setIsPaused(true);
+      toast({
+        variant: "default",
+        title: "Session Paused",
+        description: "Take your time. Resume when ready.",
+      });
+    } else {
+      // Starting or resuming
+      setIsActive(true);
+      if (isPaused) {
+        setIsPaused(false);
+        toast({
+          variant: "success",
+          title: "Session Resumed",
+          description: "Keep going!",
+        });
+      }
+    }
   };
 
   const handleNextStep = () => {
-    if (currentStep < exercise.instructions.length - 1) {
+    if (exercise && currentStep < exercise.instructions.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -156,10 +120,10 @@ function ExerciseSessionContent() {
   };
 
   const handleNextRep = () => {
-    if (exercise.repetitions) {
+    if (exercise?.repetitions) {
       if (currentRep < exercise.repetitions) {
         setCurrentRep(currentRep + 1);
-      } else if (currentSet < exercise.sets) {
+      } else if (exercise.sets && currentSet < exercise.sets) {
         // Move to next set
         setCurrentSet(currentSet + 1);
         setCurrentRep(1);
@@ -168,20 +132,58 @@ function ExerciseSessionContent() {
   };
 
   const handleCompleteSession = async () => {
-    if (!painLevel) {
-      alert("Please rate your current pain level before completing");
+    if (!painLevel && painLevel !== 0) {
+      showAlert({
+        title: "Pain Level Required",
+        description:
+          "Please rate your current pain level before completing the session.",
+        confirmText: "OK",
+      });
       return;
     }
 
-    await endSession();
-    router.push("/dashboard/exercises");
+    try {
+      await endSession();
+      toast({
+        variant: "success",
+        title: "Session Complete",
+        description: "Great job! Your progress has been saved.",
+      });
+      router.push("/dashboard/exercises");
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to complete session",
+      });
+    }
   };
 
   const handleEndSession = async () => {
-    if (confirm("Are you sure you want to end this session?")) {
-      await endSession();
-      router.push("/dashboard/exercises");
-    }
+    showAlert({
+      title: "End Session Early?",
+      description:
+        "Are you sure you want to end this session? Your progress will be saved as partial.",
+      confirmText: "Yes, End Session",
+      cancelText: "Continue Exercising",
+      onConfirm: async () => {
+        try {
+          await endSession();
+          toast({
+            variant: "success",
+            title: "Session Ended",
+            description: "Your partial progress has been saved.",
+          });
+          router.push("/dashboard/exercises");
+        } catch (error) {
+          toast({
+            variant: "error",
+            title: "Error",
+            description: "Failed to end session",
+          });
+        }
+      },
+    });
   };
 
   const formatTime = (seconds: number) => {
@@ -190,11 +192,22 @@ function ExerciseSessionContent() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const progressPercentage = exercise?.repetitions
-    ? (((currentSet - 1) * exercise.repetitions + currentRep) /
-        (exercise.sets * exercise.repetitions)) *
-      100
-    : (elapsedTime / exercise?.duration) * 100;
+  const progressPercentage =
+    exercise?.repetitions && exercise?.sets
+      ? (((currentSet - 1) * exercise.repetitions + currentRep) /
+          (exercise.sets * exercise.repetitions)) *
+        100
+      : exercise?.duration
+      ? (elapsedTime / exercise.duration) * 100
+      : 0;
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6 flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   if (!exercise) {
     return (
@@ -216,9 +229,12 @@ function ExerciseSessionContent() {
     );
   }
 
-  const isComplete = exercise.repetitions
-    ? currentSet === exercise.sets && currentRep === exercise.repetitions
-    : elapsedTime >= exercise.duration;
+  const isComplete =
+    exercise.repetitions && exercise.sets
+      ? currentSet === exercise.sets && currentRep === exercise.repetitions
+      : exercise.duration
+      ? elapsedTime >= exercise.duration
+      : false;
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-4xl">
@@ -424,6 +440,9 @@ function ExerciseSessionContent() {
           </CardContent>
         </Card>
       )}
+
+      {/* Alert Dialog */}
+      <AlertDialog />
     </div>
   );
 }

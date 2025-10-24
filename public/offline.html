@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline - Health Rehab</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .container {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
+        max-width: 500px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+
+      .icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        color: #1a202c;
+        font-size: 28px;
+        margin-bottom: 16px;
+      }
+
+      p {
+        color: #4a5568;
+        font-size: 16px;
+        line-height: 1.6;
+        margin-bottom: 24px;
+      }
+
+      .button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 32px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+      }
+
+      .features {
+        margin-top: 32px;
+        text-align: left;
+      }
+
+      .feature {
+        display: flex;
+        align-items: start;
+        margin-bottom: 16px;
+        color: #4a5568;
+      }
+
+      .feature-icon {
+        margin-right: 12px;
+        font-size: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon">📡</div>
+      <h1>You're Offline</h1>
+      <p>
+        Looks like you've lost your internet connection. Don't worry, your
+        health data is safely stored locally!
+      </p>
+
+      <button class="button" onclick="window.location.reload()">
+        Try Again
+      </button>
+
+      <div class="features">
+        <div class="feature">
+          <span class="feature-icon">✅</span>
+          <span>All your health logs are saved locally</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">📊</span>
+          <span>Analytics and charts work offline</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">🔒</span>
+          <span>Your data remains private and secure</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Auto-retry connection every 5 seconds
+      let retryCount = 0;
+      const maxRetries = 12; // 1 minute total
+
+      function checkConnection() {
+        fetch("/", { method: "HEAD", cache: "no-cache" })
+          .then(() => {
+            // Connection restored
+            window.location.reload();
+          })
+          .catch(() => {
+            retryCount++;
+            if (retryCount < maxRetries) {
+              setTimeout(checkConnection, 5000);
+            }
+          });
+      }
+
+      // Start checking after 5 seconds
+      setTimeout(checkConnection, 5000);
+
+      // Listen for online event
+      window.addEventListener("online", () => {
+        window.location.reload();
+      });
+    </script>
+  </body>
+</html>

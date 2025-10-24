@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useAlertDialog } from "@/components/ui/alert-dialog";
+import { useMedicationStore, useUserStore } from "@/stores";
+import { toast } from "@/hooks/use-toast";
+import { USER_ID_FALLBACK } from "@/lib/constants";
+import { Medication as MedicationType } from "@/types/medication";
 import {
   Plus,
   Pill,
@@ -18,26 +23,13 @@ import {
   Edit,
   Trash2,
   Info,
+  Loader2,
 } from "lucide-react";
 
-interface Medication {
-  id: string;
-  name: string;
-  type: "prescription" | "supplement" | "ayurvedic" | "homeopathic" | "other";
-  dosage: string;
-  purpose: string;
-  schedule: {
-    frequency: string;
-    times: string[];
-    withMeal: boolean;
-  };
-  inventory: {
-    current: number;
-    unit: string;
-    lowThreshold: number;
-  };
-  active: boolean;
-  instructions?: string;
+interface ScheduleItem {
+  medication: MedicationType;
+  time: string;
+  status: string;
 }
 
 interface MedicationLog {
@@ -49,13 +41,31 @@ interface MedicationLog {
 }
 
 export default function MedicationPage() {
-  const [medications, setMedications] = useState<Medication[]>([]);
-  const [todayLogs, setTodayLogs] = useState<MedicationLog[]>([]);
+  const { showAlert, AlertDialog } = useAlertDialog();
+  const { user } = useUserStore();
+  const {
+    medications,
+    logs,
+    adherence,
+    addMedication: addMed,
+    deleteMedication: deleteMed,
+    toggleMedicationActive,
+    logIntake: logMedIntake,
+    fetchMedications,
+    fetchTodaySchedule,
+    fetchAdherence,
+    getLowInventoryMedications,
+    isLoading,
+  } = useMedicationStore();
+
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form state
   const [medName, setMedName] = useState("");
-  const [medType, setMedType] = useState<Medication["type"]>("prescription");
+  const [medType, setMedType] = useState<
+    "prescription" | "supplement" | "ayurvedic" | "homeopathic" | "other"
+  >("prescription");
   const [medDosage, setMedDosage] = useState("");
   const [medPurpose, setMedPurpose] = useState("");
   const [medFrequency, setMedFrequency] = useState("once");
@@ -66,134 +76,234 @@ export default function MedicationPage() {
   const [medLowThreshold, setMedLowThreshold] = useState("5");
   const [medInstructions, setMedInstructions] = useState("");
 
-  // Add medication
-  const addMedication = () => {
-    if (!medName || !medDosage || !medPurpose) {
-      alert("Please fill in all required fields");
-      return;
-    }
-
-    const validTimes = medTimes.filter((t) => t !== "");
-    if (validTimes.length === 0) {
-      alert("Please add at least one time");
-      return;
-    }
-
-    const newMed: Medication = {
-      id: Date.now().toString(),
-      name: medName,
-      type: medType,
-      dosage: medDosage,
-      purpose: medPurpose,
-      schedule: {
-        frequency: medFrequency,
-        times: validTimes,
-        withMeal: medWithMeal,
-      },
-      inventory: {
-        current: parseInt(medInventory),
-        unit: medUnit,
-        lowThreshold: parseInt(medLowThreshold),
-      },
-      active: true,
-      instructions: medInstructions || undefined,
+  // Load data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        await Promise.all([
+          fetchMedications(),
+          fetchTodaySchedule(),
+          fetchAdherence(),
+        ]);
+      } catch (error) {
+        toast({
+          variant: "error",
+          title: "Error",
+          description: "Failed to load medication data",
+        });
+      }
     };
+    loadData();
+  }, [fetchMedications, fetchTodaySchedule, fetchAdherence]);
 
-    setMedications((prev) => [...prev, newMed]);
+  // Calculate today's logs
+  const todayLogs = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return logs.filter((log) => {
+      const logDate = new Date(log.scheduledTime);
+      logDate.setHours(0, 0, 0, 0);
+      return logDate.getTime() === today.getTime();
+    });
+  }, [logs]);
 
-    // Reset form
-    setMedName("");
-    setMedDosage("");
-    setMedPurpose("");
-    setMedTimes([""]);
-    setMedInventory("30");
-    setMedInstructions("");
-    setShowAddForm(false);
+  // Calculate overall adherence
+  const overallAdherence = useMemo(() => {
+    if (adherence.length === 0) return 0;
+    const total = adherence.reduce((sum, a) => sum + a.stats.adherenceRate, 0);
+    return Math.round(total / adherence.length);
+  }, [adherence]);
+
+  // Get low inventory medications
+  const lowInventoryMeds = getLowInventoryMedications();
+
+  // Add medication
+  const addMedication = async () => {
+    if (!medName || !medDosage || !medPurpose) {
+      toast({
+        variant: "error",
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+      });
+      return;
+    }
+
+    const validTimes = medTimes.filter((t) => t.trim() !== "");
+    if (validTimes.length === 0) {
+      toast({
+        variant: "error",
+        title: "Validation Error",
+        description: "Please add at least one time for medication",
+      });
+      return;
+    }
+
+    try {
+      await addMed({
+        userId: user?.id ?? USER_ID_FALLBACK,
+        name: medName,
+        type: medType,
+        dosage: medDosage,
+        form: "tablet",
+        purpose: medPurpose,
+        schedule: {
+          frequency: medFrequency as
+            | "once"
+            | "twice"
+            | "thrice"
+            | "four_times"
+            | "as_needed",
+          times: validTimes,
+          withMeal: medWithMeal,
+        },
+        startDate: new Date(),
+        indefinite: true,
+        inventory: {
+          current: parseInt(medInventory),
+          unit: medUnit,
+          lowThreshold: parseInt(medLowThreshold),
+        },
+        active: true,
+        instructions: medInstructions || undefined,
+      });
+
+      toast({
+        variant: "success",
+        title: "Medication Added",
+        description: `${medName} has been added successfully`,
+      });
+
+      // Reset form
+      setMedName("");
+      setMedType("prescription");
+      setMedDosage("");
+      setMedPurpose("");
+      setMedFrequency("once");
+      setMedTimes([""]);
+      setMedWithMeal(false);
+      setMedInventory("30");
+      setMedUnit("tablets");
+      setMedLowThreshold("5");
+      setMedInstructions("");
+      setShowAddForm(false);
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to add medication. Please try again.",
+      });
+    }
   };
 
   // Delete medication
-  const deleteMedication = (id: string) => {
-    setMedications((prev) => prev.filter((m) => m.id !== id));
+  const handleDeleteMedication = async (id: string) => {
+    try {
+      await deleteMed(id);
+      toast({
+        variant: "success",
+        title: "Medication Deleted",
+        description: "Medication has been removed successfully",
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to delete medication",
+      });
+    }
   };
 
   // Toggle medication active status
-  const toggleMedicationStatus = (id: string) => {
-    setMedications((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, active: !m.active } : m))
-    );
+  const handleToggleStatus = async (id: string) => {
+    try {
+      await toggleMedicationActive(id);
+      const med = medications.find((m) => m.id === id);
+      toast({
+        variant: "success",
+        title: med?.active ? "Medication Deactivated" : "Medication Activated",
+        description: `${med?.name} has been ${
+          med?.active ? "deactivated" : "activated"
+        }`,
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to update medication status",
+      });
+    }
   };
 
   // Log medication intake
-  const logIntake = (medicationId: string, scheduledTime: string) => {
-    const now = new Date();
-    const actualTime = now.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    setTodayLogs((prev) => [
-      ...prev.filter(
-        (l) =>
-          !(
-            l.medicationId === medicationId && l.scheduledTime === scheduledTime
-          )
-      ),
-      {
+  const handleLogIntake = async (medicationId: string, scheduledTime: Date) => {
+    try {
+      await logMedIntake(
         medicationId,
         scheduledTime,
-        status: "taken",
-        actualTime,
-      },
-    ]);
-
-    // Decrease inventory
-    setMedications((prev) =>
-      prev.map((m) =>
-        m.id === medicationId
-          ? {
-              ...m,
-              inventory: {
-                ...m.inventory,
-                current: m.inventory.current - 1,
-              },
-            }
-          : m
-      )
-    );
+        "taken",
+        undefined,
+        undefined
+      );
+      toast({
+        variant: "success",
+        title: "Intake Logged",
+        description: "Medication intake has been recorded",
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to log medication intake",
+      });
+    }
   };
 
   // Skip medication
-  const skipIntake = (medicationId: string, scheduledTime: string) => {
-    setTodayLogs((prev) => [
-      ...prev.filter(
-        (l) =>
-          !(
-            l.medicationId === medicationId && l.scheduledTime === scheduledTime
-          )
-      ),
-      {
+  const handleSkipIntake = async (
+    medicationId: string,
+    scheduledTime: Date
+  ) => {
+    try {
+      await logMedIntake(
         medicationId,
         scheduledTime,
-        status: "skipped",
-      },
-    ]);
+        "skipped",
+        undefined,
+        undefined
+      );
+      toast({
+        variant: "success",
+        title: "Intake Skipped",
+        description: "Medication intake has been marked as skipped",
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to skip medication intake",
+      });
+    }
   };
 
   // Check if medication is logged
-  const getLogStatus = (medicationId: string, time: string) => {
+  const getLogStatus = (medicationId: string, timeString: string) => {
+    // Convert timeString to today's Date for comparison
+    const [hours, minutes] = timeString.split(":");
+    const scheduledHours = parseInt(hours);
+    const scheduledMinutes = parseInt(minutes);
+
     const log = todayLogs.find(
-      (l) => l.medicationId === medicationId && l.scheduledTime === time
+      (l) =>
+        l.medicationId === medicationId &&
+        l.scheduledTime.getHours() === scheduledHours &&
+        l.scheduledTime.getMinutes() === scheduledMinutes
     );
     return log?.status || "pending";
   };
 
   // Get today's schedule
-  const getTodaySchedule = () => {
-    const schedule: Array<{
-      medication: Medication;
-      time: string;
-      status: string;
-    }> = [];
+  const getTodaySchedule = (): ScheduleItem[] => {
+    const schedule: ScheduleItem[] = [];
 
     medications
       .filter((m) => m.active)
@@ -221,6 +331,20 @@ export default function MedicationPage() {
 
   const todaySchedule = getTodaySchedule();
   const adherenceRate = getAdherenceRate();
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
+            <p className="text-muted-foreground">Loading medications...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6 px-4 max-w-6xl">
@@ -289,9 +413,20 @@ export default function MedicationPage() {
                         <>
                           <Button
                             size="sm"
-                            onClick={() =>
-                              logIntake(item.medication.id, item.time)
-                            }
+                            onClick={() => {
+                              const [hours, minutes] = item.time.split(":");
+                              const scheduledTime = new Date();
+                              scheduledTime.setHours(
+                                parseInt(hours),
+                                parseInt(minutes),
+                                0,
+                                0
+                              );
+                              handleLogIntake(
+                                item.medication.id,
+                                scheduledTime
+                              );
+                            }}
                           >
                             <CheckCircle2 className="w-4 h-4 mr-1" />
                             Take
@@ -299,9 +434,20 @@ export default function MedicationPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() =>
-                              skipIntake(item.medication.id, item.time)
-                            }
+                            onClick={() => {
+                              const [hours, minutes] = item.time.split(":");
+                              const scheduledTime = new Date();
+                              scheduledTime.setHours(
+                                parseInt(hours),
+                                parseInt(minutes),
+                                0,
+                                0
+                              );
+                              handleSkipIntake(
+                                item.medication.id,
+                                scheduledTime
+                              );
+                            }}
                           >
                             Skip
                           </Button>
@@ -562,14 +708,14 @@ export default function MedicationPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => toggleMedicationStatus(med.id)}
+                          onClick={() => handleToggleStatus(med.id)}
                         >
                           {med.active ? "Pause" : "Resume"}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => deleteMedication(med.id)}
+                          onClick={() => handleDeleteMedication(med.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -599,21 +745,23 @@ export default function MedicationPage() {
                     </div>
 
                     {/* Inventory */}
-                    <div className="flex items-center gap-4 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Package className="w-4 h-4" />
-                        <span>
-                          {med.inventory.current} {med.inventory.unit}
-                        </span>
-                        {med.inventory.current <=
-                          med.inventory.lowThreshold && (
-                          <Badge variant="error" className="text-xs ml-2">
-                            <AlertTriangle className="w-3 h-3 mr-1" />
-                            Low stock
-                          </Badge>
-                        )}
+                    {med.inventory && (
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="flex items-center gap-1">
+                          <Package className="w-4 h-4" />
+                          <span>
+                            {med.inventory.current} {med.inventory.unit}
+                          </span>
+                          {med.inventory.current <=
+                            med.inventory.lowThreshold && (
+                            <Badge variant="error" className="text-xs ml-2">
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Low stock
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Instructions */}
                     {med.instructions && (
@@ -675,6 +823,7 @@ export default function MedicationPage() {
                     medications.filter(
                       (m) =>
                         m.active &&
+                        m.inventory &&
                         m.inventory.current <= m.inventory.lowThreshold
                     ).length
                   }
@@ -731,6 +880,9 @@ export default function MedicationPage() {
           </Card>
         </div>
       </div>
+
+      {/* Alert Dialog */}
+      <AlertDialog />
     </div>
   );
 }

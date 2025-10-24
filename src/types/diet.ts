@@ -29,6 +29,7 @@ export interface MealPlan {
 
 export interface Meal {
   id: string;
+  entryType: "meal"; // Discriminator field
   mealPlanId?: string;
   userId: string;
 
@@ -158,6 +159,7 @@ export interface DietLog {
 // Water intake tracking
 export interface WaterLog {
   id: string;
+  entryType: "water"; // Discriminator field
   userId: string;
   date: Date;
 

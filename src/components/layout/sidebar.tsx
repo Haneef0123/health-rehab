@@ -10,6 +10,7 @@ import {
   Utensils,
   Pill,
   TrendingUp,
+  BarChart3,
   Settings,
   Menu,
   X,
@@ -23,6 +24,7 @@ const navigation = [
   { name: "Diet", href: "/dashboard/diet", icon: Utensils },
   { name: "Medication", href: "/dashboard/medication", icon: Pill },
   { name: "Progress", href: "/dashboard/progress", icon: TrendingUp },
+  { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -35,7 +37,7 @@ export function Sidebar() {
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-gray-900/50 lg:hidden"
+          className="cursor-pointer fixed inset-0 z-40 bg-gray-900/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -63,7 +65,7 @@ export function Sidebar() {
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden"
+              className="cursor-pointer lg:hidden"
               aria-label="Close sidebar"
             >
               <X className="h-6 w-6 text-gray-500" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -11,6 +11,9 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useExerciseStore, useUserStore } from "@/stores";
+import { toast } from "@/hooks/use-toast";
+import { USER_ID_FALLBACK } from "@/lib/constants";
 import {
   Play,
   Clock,
@@ -21,6 +24,8 @@ import {
   Info,
   Repeat,
   TrendingUp,
+  Calendar,
+  Loader2,
 } from "lucide-react";
 
 // Mock exercise data - will be replaced with actual data from store/API
@@ -227,9 +232,83 @@ export default function ExerciseDetailPage({
 }) {
   const router = useRouter();
   const { id } = use(params);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Get exercise from mock data
-  const exercise = MOCK_EXERCISES[id as keyof typeof MOCK_EXERCISES];
+  const { user } = useUserStore();
+  const { exercises, sessions, fetchExercises } = useExerciseStore();
+
+  // Load exercises on mount
+  useEffect(() => {
+    const loadExercises = async () => {
+      setIsLoading(true);
+      try {
+        await fetchExercises();
+      } catch (error) {
+        toast({
+          variant: "error",
+          title: "Error",
+          description: "Failed to load exercise details",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadExercises();
+  }, [fetchExercises]);
+
+  // Get exercise from store
+  const exercise = exercises.find((ex) => ex.id === id);
+
+  // Calculate performance stats
+  const performanceStats = useMemo(() => {
+    if (!exercise) return null;
+
+    const exerciseSessions = sessions.filter((session) =>
+      session.completed.some(
+        (completion) =>
+          completion.exerciseId === exercise.id && completion.completed
+      )
+    );
+
+    const lastPerformed =
+      exerciseSessions.length > 0
+        ? new Date(
+            Math.max(...exerciseSessions.map((s) => new Date(s.date).getTime()))
+          )
+        : null;
+
+    // Calculate average pain during/after
+    const painData = exerciseSessions
+      .map((s) => ({
+        during: s.painDuring,
+        after: s.painAfter,
+      }))
+      .filter((p) => p.during !== undefined && p.after !== undefined);
+
+    const avgPainDuring =
+      painData.length > 0
+        ? painData.reduce((sum, p) => sum + p.during, 0) / painData.length
+        : 0;
+    const avgPainAfter =
+      painData.length > 0
+        ? painData.reduce((sum, p) => sum + p.after, 0) / painData.length
+        : 0;
+
+    return {
+      totalSessions: exerciseSessions.length,
+      lastPerformed,
+      avgPainDuring: avgPainDuring.toFixed(1),
+      avgPainAfter: avgPainAfter.toFixed(1),
+    };
+  }, [exercise, sessions]);
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6 flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   if (!exercise) {
     return (
@@ -374,6 +453,68 @@ export default function ExerciseDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Performance Stats */}
+      {performanceStats && performanceStats.totalSessions > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Your Performance Stats
+            </CardTitle>
+            <CardDescription>
+              Track your progress with this exercise
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Repeat className="h-4 w-4" />
+                  <span>Total Sessions</span>
+                </div>
+                <div className="text-2xl font-bold">
+                  {performanceStats.totalSessions}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Calendar className="h-4 w-4" />
+                  <span>Last Performed</span>
+                </div>
+                <div className="text-sm font-medium">
+                  {performanceStats.lastPerformed
+                    ? new Date(
+                        performanceStats.lastPerformed
+                      ).toLocaleDateString()
+                    : "Never"}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Avg Pain During</span>
+                </div>
+                <div className="text-2xl font-bold">
+                  {performanceStats.avgPainDuring}/10
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Avg Pain After</span>
+                </div>
+                <div className="text-2xl font-bold">
+                  {performanceStats.avgPainAfter}/10
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Instructions Card */}
       <Card>

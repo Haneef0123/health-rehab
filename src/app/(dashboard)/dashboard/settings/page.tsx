@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUserStore } from "@/stores";
+import { ProfileSection } from "@/components/settings/ProfileSection";
+import { MedicalSection } from "@/components/settings/MedicalSection";
+import { PreferencesSection } from "@/components/settings/PreferencesSection";
+import { BackupSection } from "@/components/settings/BackupSection";
 import {
   Card,
   CardContent,
@@ -13,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useAlertDialog } from "@/components/ui/alert-dialog";
 import {
   User,
   Heart,
@@ -23,9 +28,16 @@ import {
   X,
   Plus,
   AlertTriangle,
+  Database,
+  Download,
+  Upload,
+  Trash2,
+  CheckCircle2,
 } from "lucide-react";
+import { exportAllData, importData, clearAllData } from "@/lib/db";
 
 export default function SettingsPage() {
+  const { showAlert, AlertDialog } = useAlertDialog();
   const { user, updateUser, updateMedicalProfile, updatePreferences } =
     useUserStore();
 
@@ -81,9 +93,80 @@ export default function SettingsPage() {
   );
 
   const [activeTab, setActiveTab] = useState<
-    "profile" | "medical" | "preferences"
+    "profile" | "medical" | "preferences" | "backup"
   >("profile");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Backup state
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [lastBackupDate, setLastBackupDate] = useState<Date | null>(null);
+  const [backupSuccess, setBackupSuccess] = useState<string | null>(null);
+
+  // Track changes for dirty state
+  useEffect(() => {
+    if (!user) {
+      setIsDirty(false);
+      return;
+    }
+
+    const hasProfileChanges =
+      name !== (user.name || "") ||
+      email !== (user.email || "") ||
+      dateOfBirth !==
+        (user.dateOfBirth
+          ? new Date(user.dateOfBirth).toISOString().split("T")[0]
+          : "");
+
+    const hasMedicalChanges =
+      JSON.stringify(conditions) !==
+        JSON.stringify(user.medicalProfile?.conditions || []) ||
+      sittingTolerance !== (user.medicalProfile?.sittingTolerance || 15) ||
+      JSON.stringify(chronicPainAreas) !==
+        JSON.stringify(user.medicalProfile?.chronicPainAreas || []) ||
+      height !== (user.medicalProfile?.height || 0) ||
+      weight !== (user.medicalProfile?.weight || 0) ||
+      primaryDoctor !== (user.medicalProfile?.primaryDoctor || "") ||
+      physiotherapist !== (user.medicalProfile?.physiotherapist || "");
+
+    const hasPreferenceChanges =
+      theme !== (user.preferences?.theme || "system") ||
+      exerciseReminders !==
+        (user.preferences?.notifications?.exerciseReminders ?? true) ||
+      painLogReminders !==
+        (user.preferences?.notifications?.painLogReminders ?? true) ||
+      medicationReminders !==
+        (user.preferences?.notifications?.medicationReminders ?? true) ||
+      reminderTime !==
+        (user.preferences?.notifications?.reminderTime || "09:00") ||
+      naturopathicDiet !==
+        (user.preferences?.dietPreferences?.naturopathicDiet ?? true) ||
+      waterIntakeGoal !==
+        (user.preferences?.dietPreferences?.waterIntakeGoal || 8);
+
+    setIsDirty(hasProfileChanges || hasMedicalChanges || hasPreferenceChanges);
+  }, [
+    user,
+    name,
+    email,
+    dateOfBirth,
+    conditions,
+    sittingTolerance,
+    chronicPainAreas,
+    height,
+    weight,
+    primaryDoctor,
+    physiotherapist,
+    theme,
+    exerciseReminders,
+    painLogReminders,
+    medicationReminders,
+    reminderTime,
+    naturopathicDiet,
+    waterIntakeGoal,
+  ]);
 
   const handleAddCondition = () => {
     if (newCondition.trim()) {
@@ -171,8 +254,130 @@ export default function SettingsPage() {
 
     setTimeout(() => {
       setIsSaving(false);
-      alert("Settings saved successfully!");
+      showAlert({
+        title: "Settings Saved",
+        description: "Your settings have been saved successfully!",
+        confirmText: "OK",
+      });
     }, 500);
+  };
+
+  // Backup handlers
+  const handleExportData = async () => {
+    setIsExporting(true);
+    setBackupSuccess(null);
+
+    try {
+      const data = await exportAllData();
+
+      // Create downloadable JSON file
+      const dataStr = JSON.stringify(data, null, 2);
+      const dataBlob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(dataBlob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `health-rehab-backup-${
+        new Date().toISOString().split("T")[0]
+      }.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setLastBackupDate(new Date());
+      setBackupSuccess("Data exported successfully!");
+
+      setTimeout(() => setBackupSuccess(null), 3000);
+    } catch (error) {
+      console.error("Export failed:", error);
+      showAlert({
+        title: "Export Failed",
+        description: "Failed to export data. Please try again.",
+        confirmText: "OK",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportData = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setBackupSuccess(null);
+
+    try {
+      const text = await file.text();
+      const result = await importData(text);
+
+      if (result.success) {
+        setBackupSuccess(result.message);
+
+        // Refresh after 2 seconds
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        showAlert({
+          title: "Import Failed",
+          description: result.message,
+          confirmText: "OK",
+        });
+      }
+    } catch (error) {
+      console.error("Import failed:", error);
+      showAlert({
+        title: "Import Failed",
+        description:
+          "Failed to import data. Please ensure the file is valid JSON.",
+        confirmText: "OK",
+      });
+    } finally {
+      setIsImporting(false);
+      // Reset file input
+      event.target.value = "";
+    }
+  };
+
+  const handleClearAllData = async () => {
+    showAlert({
+      title: "⚠️ Delete All Data",
+      description:
+        "This will permanently delete ALL your data including pain logs, exercise sessions, diet entries, and medications. This action cannot be undone. Are you absolutely sure?",
+      confirmText: "Yes, Delete Everything",
+      cancelText: "Cancel",
+      variant: "destructive",
+      onConfirm: async () => {
+        setIsClearing(true);
+        setBackupSuccess(null);
+
+        try {
+          await clearAllData();
+
+          showAlert({
+            title: "Data Cleared",
+            description: "All data has been cleared. The page will now reload.",
+            confirmText: "OK",
+            onConfirm: () => {
+              window.location.reload();
+            },
+          });
+        } catch (error) {
+          console.error("Clear data failed:", error);
+          showAlert({
+            title: "Clear Failed",
+            description: "Failed to clear data. Please try again.",
+            confirmText: "OK",
+          });
+        } finally {
+          setIsClearing(false);
+        }
+      },
+    });
   };
 
   return (
@@ -189,7 +394,7 @@ export default function SettingsPage() {
       <div className="flex gap-2 border-b">
         <button
           onClick={() => setActiveTab("profile")}
-          className={`px-4 py-2 font-medium transition-colors ${
+          className={`cursor-pointer px-4 py-2 font-medium transition-colors ${
             activeTab === "profile"
               ? "border-b-2 border-primary-500 text-primary-500"
               : "text-muted-foreground hover:text-foreground"
@@ -200,7 +405,7 @@ export default function SettingsPage() {
         </button>
         <button
           onClick={() => setActiveTab("medical")}
-          className={`px-4 py-2 font-medium transition-colors ${
+          className={`cursor-pointer px-4 py-2 font-medium transition-colors ${
             activeTab === "medical"
               ? "border-b-2 border-primary-500 text-primary-500"
               : "text-muted-foreground hover:text-foreground"
@@ -211,7 +416,7 @@ export default function SettingsPage() {
         </button>
         <button
           onClick={() => setActiveTab("preferences")}
-          className={`px-4 py-2 font-medium transition-colors ${
+          className={`cursor-pointer px-4 py-2 font-medium transition-colors ${
             activeTab === "preferences"
               ? "border-b-2 border-primary-500 text-primary-500"
               : "text-muted-foreground hover:text-foreground"
@@ -220,404 +425,110 @@ export default function SettingsPage() {
           <Bell className="inline h-4 w-4 mr-2" />
           Preferences
         </button>
+        <button
+          onClick={() => setActiveTab("backup")}
+          className={`cursor-pointer px-4 py-2 font-medium transition-colors ${
+            activeTab === "backup"
+              ? "border-b-2 border-primary-500 text-primary-500"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Database className="inline h-4 w-4 mr-2" />
+          Backup & Data
+        </button>
       </div>
 
       {/* Profile Tab */}
       {activeTab === "profile" && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-              <CardDescription>
-                Update your basic profile information
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your full name"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your.email@example.com"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="dob">Date of Birth</Label>
-                <Input
-                  id="dob"
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <ProfileSection
+          name={name}
+          email={email}
+          dateOfBirth={dateOfBirth}
+          onNameChange={setName}
+          onEmailChange={setEmail}
+          onDateOfBirthChange={setDateOfBirth}
+        />
       )}
 
       {/* Medical Tab */}
       {activeTab === "medical" && (
-        <div className="space-y-6">
-          {/* Conditions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Medical Conditions</CardTitle>
-              <CardDescription>
-                Track your diagnosed conditions and concerns
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  value={newCondition}
-                  onChange={(e) => setNewCondition(e.target.value)}
-                  placeholder="Add a condition (e.g., cervical lordosis)"
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter") {
-                      handleAddCondition();
-                    }
-                  }}
-                />
-                <Button onClick={handleAddCondition} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {conditions.map((condition, index) => (
-                  <Badge key={index} variant="secondary" className="text-sm">
-                    {condition}
-                    <button
-                      onClick={() => handleRemoveCondition(index)}
-                      className="ml-2 hover:text-error"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Physical Limitations */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Physical Limitations</CardTitle>
-              <CardDescription>
-                Track your physical tolerances and limitations
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="sitting">Sitting Tolerance (minutes)</Label>
-                <Input
-                  id="sitting"
-                  type="number"
-                  min="0"
-                  value={sittingTolerance}
-                  onChange={(e) =>
-                    setSittingTolerance(parseInt(e.target.value) || 0)
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Chronic Pain Areas</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={newPainArea}
-                    onChange={(e) => setNewPainArea(e.target.value)}
-                    placeholder="Add pain area (e.g., lower back)"
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        handleAddPainArea();
-                      }
-                    }}
-                  />
-                  <Button onClick={handleAddPainArea} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {chronicPainAreas.map((area, index) => (
-                    <Badge key={index} variant="error" className="text-sm">
-                      {area}
-                      <button
-                        onClick={() => handleRemovePainArea(index)}
-                        className="ml-2 hover:text-white"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Physical Metrics */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Physical Metrics</CardTitle>
-              <CardDescription>Track your height and weight</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="height">Height (cm)</Label>
-                <Input
-                  id="height"
-                  type="number"
-                  min="0"
-                  value={height || ""}
-                  onChange={(e) => setHeight(parseInt(e.target.value) || 0)}
-                  placeholder="175"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="weight">Weight (kg)</Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  min="0"
-                  value={weight || ""}
-                  onChange={(e) => setWeight(parseInt(e.target.value) || 0)}
-                  placeholder="70"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Healthcare Providers */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Healthcare Providers</CardTitle>
-              <CardDescription>Keep track of your medical team</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="doctor">Primary Doctor</Label>
-                <Input
-                  id="doctor"
-                  value={primaryDoctor}
-                  onChange={(e) => setPrimaryDoctor(e.target.value)}
-                  placeholder="Dr. Smith"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="physio">Physiotherapist</Label>
-                <Input
-                  id="physio"
-                  value={physiotherapist}
-                  onChange={(e) => setPhysiotherapist(e.target.value)}
-                  placeholder="Jane Doe, PT"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Safety Notice */}
-          <Card className="border-warning/50 bg-warning-50">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-semibold text-sm">Medical Disclaimer</p>
-                  <p className="text-sm text-warning-800">
-                    This information is for tracking purposes only. Always
-                    consult with qualified healthcare professionals for medical
-                    advice, diagnosis, and treatment.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <MedicalSection
+          conditions={conditions}
+          newCondition={newCondition}
+          sittingTolerance={sittingTolerance}
+          chronicPainAreas={chronicPainAreas}
+          newPainArea={newPainArea}
+          height={height}
+          weight={weight}
+          primaryDoctor={primaryDoctor}
+          physiotherapist={physiotherapist}
+          onNewConditionChange={setNewCondition}
+          onAddCondition={handleAddCondition}
+          onRemoveCondition={handleRemoveCondition}
+          onSittingToleranceChange={setSittingTolerance}
+          onNewPainAreaChange={setNewPainArea}
+          onAddPainArea={handleAddPainArea}
+          onRemovePainArea={handleRemovePainArea}
+          onHeightChange={setHeight}
+          onWeightChange={setWeight}
+          onPrimaryDoctorChange={setPrimaryDoctor}
+          onPhysiotherapistChange={setPhysiotherapist}
+        />
       )}
 
       {/* Preferences Tab */}
       {activeTab === "preferences" && (
-        <div className="space-y-6">
-          {/* Notifications */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
-                Notifications
-              </CardTitle>
-              <CardDescription>
-                Manage your notification preferences
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Exercise Reminders</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Get reminded about scheduled exercises
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={exerciseReminders}
-                  onChange={(e) => setExerciseReminders(e.target.checked)}
-                  className="h-5 w-5"
-                />
-              </div>
+        <PreferencesSection
+          theme={theme}
+          exerciseReminders={exerciseReminders}
+          painLogReminders={painLogReminders}
+          medicationReminders={medicationReminders}
+          reminderTime={reminderTime}
+          naturopathicDiet={naturopathicDiet}
+          waterIntakeGoal={waterIntakeGoal}
+          onThemeChange={(value) =>
+            setTheme(value as "light" | "dark" | "system")
+          }
+          onExerciseRemindersChange={setExerciseReminders}
+          onPainLogRemindersChange={setPainLogReminders}
+          onMedicationRemindersChange={setMedicationReminders}
+          onReminderTimeChange={setReminderTime}
+          onNaturopathicDietChange={setNaturopathicDiet}
+          onWaterIntakeGoalChange={setWaterIntakeGoal}
+        />
+      )}
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Pain Log Reminders</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Daily reminders to log your pain levels
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={painLogReminders}
-                  onChange={(e) => setPainLogReminders(e.target.checked)}
-                  className="h-5 w-5"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Medication Reminders</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Reminders to take your medications
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={medicationReminders}
-                  onChange={(e) => setMedicationReminders(e.target.checked)}
-                  className="h-5 w-5"
-                />
-              </div>
-
-              <div className="space-y-2 pt-4 border-t">
-                <Label htmlFor="reminder-time">Default Reminder Time</Label>
-                <Input
-                  id="reminder-time"
-                  type="time"
-                  value={reminderTime}
-                  onChange={(e) => setReminderTime(e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Diet Preferences */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Utensils className="h-5 w-5" />
-                Diet Preferences
-              </CardTitle>
-              <CardDescription>
-                Dr. Manthena Satyanarayana Raju naturopathic principles
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Naturopathic Diet</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Follow natural healing principles
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={naturopathicDiet}
-                  onChange={(e) => setNaturopathicDiet(e.target.checked)}
-                  className="h-5 w-5"
-                />
-              </div>
-
-              <div className="space-y-2 pt-4 border-t">
-                <Label htmlFor="water-goal">
-                  Daily Water Intake Goal (glasses)
-                </Label>
-                <Input
-                  id="water-goal"
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={waterIntakeGoal}
-                  onChange={(e) =>
-                    setWaterIntakeGoal(parseInt(e.target.value) || 8)
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Appearance */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Appearance</CardTitle>
-              <CardDescription>Customize how the app looks</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Theme</Label>
-                <div className="flex gap-2">
-                  <Button
-                    variant={theme === "light" ? "default" : "outline"}
-                    onClick={() => setTheme("light")}
-                    className="flex-1"
-                  >
-                    Light
-                  </Button>
-                  <Button
-                    variant={theme === "dark" ? "default" : "outline"}
-                    onClick={() => setTheme("dark")}
-                    className="flex-1"
-                  >
-                    Dark
-                  </Button>
-                  <Button
-                    variant={theme === "system" ? "default" : "outline"}
-                    onClick={() => setTheme("system")}
-                    className="flex-1"
-                  >
-                    System
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Backup & Data Tab */}
+      {activeTab === "backup" && (
+        <BackupSection
+          backupSuccess={backupSuccess}
+          lastBackupDate={lastBackupDate}
+          isExporting={isExporting}
+          isImporting={isImporting}
+          isClearing={isClearing}
+          onExport={handleExportData}
+          onImport={handleImportData}
+          onClearAll={handleClearAllData}
+        />
       )}
 
       {/* Save Button */}
-      <div className="sticky bottom-6 bg-background/80 backdrop-blur-sm p-4 rounded-lg border">
-        <Button
-          onClick={handleSave}
-          size="lg"
-          className="w-full gap-2"
-          disabled={isSaving}
-        >
-          <Save className="h-5 w-5" />
-          {isSaving ? "Saving..." : "Save Settings"}
-        </Button>
-      </div>
+      {activeTab !== "backup" && (
+        <div className="sticky bottom-6 bg-background/80 backdrop-blur-sm p-4 rounded-lg border">
+          <Button
+            onClick={handleSave}
+            size="lg"
+            className="w-full gap-2"
+            disabled={!isDirty || isSaving}
+          >
+            <Save className="h-5 w-5" />
+            {isSaving ? "Saving..." : isDirty ? "Save Changes" : "No Changes"}
+          </Button>
+        </div>
+      )}
+
+      {/* Alert Dialog */}
+      <AlertDialog />
     </div>
   );
 }
