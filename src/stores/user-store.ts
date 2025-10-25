@@ -24,6 +24,7 @@ const DEFAULT_USER: User = {
   name: "Haneef Shaikh",
   email: "haneef@example.com",
   dateOfBirth: new Date("1990-01-01"), // Update with your actual DOB
+  documents: [],
   medicalProfile: {
     conditions: ["cervical lordosis", "disc bulges C4-C5, C5-C6"],
     sittingTolerance: 15, // minutes

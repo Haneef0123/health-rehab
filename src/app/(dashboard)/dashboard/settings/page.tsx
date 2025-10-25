@@ -6,6 +6,7 @@ import { ProfileSection } from "@/components/settings/ProfileSection";
 import { MedicalSection } from "@/components/settings/MedicalSection";
 import { PreferencesSection } from "@/components/settings/PreferencesSection";
 import { BackupSection } from "@/components/settings/BackupSection";
+import { DocumentsSection } from "@/components/settings/DocumentsSection";
 import {
   Card,
   CardContent,
@@ -33,6 +34,7 @@ import {
   Upload,
   Trash2,
   CheckCircle2,
+  FileText,
 } from "lucide-react";
 import { exportAllData, importData, clearAllData } from "@/lib/db";
 
@@ -93,7 +95,7 @@ export default function SettingsPage() {
   );
 
   const [activeTab, setActiveTab] = useState<
-    "profile" | "medical" | "preferences" | "backup"
+    "profile" | "medical" | "preferences" | "documents" | "backup"
   >("profile");
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -426,6 +428,17 @@ export default function SettingsPage() {
           Preferences
         </button>
         <button
+          onClick={() => setActiveTab("documents")}
+          className={`cursor-pointer px-4 py-2 font-medium transition-colors ${
+            activeTab === "documents"
+              ? "border-b-2 border-primary-500 text-primary-500"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <FileText className="inline h-4 w-4 mr-2" />
+          Documents
+        </button>
+        <button
           onClick={() => setActiveTab("backup")}
           className={`cursor-pointer px-4 py-2 font-medium transition-colors ${
             activeTab === "backup"
@@ -498,6 +511,9 @@ export default function SettingsPage() {
         />
       )}
 
+      {/* Documents Tab */}
+      {activeTab === "documents" && <DocumentsSection />}
+
       {/* Backup & Data Tab */}
       {activeTab === "backup" && (
         <BackupSection
@@ -513,7 +529,7 @@ export default function SettingsPage() {
       )}
 
       {/* Save Button */}
-      {activeTab !== "backup" && (
+      {activeTab !== "backup" && activeTab !== "documents" && (
         <div className="sticky bottom-6 bg-background/80 backdrop-blur-sm p-4 rounded-lg border">
           <Button
             onClick={handleSave}

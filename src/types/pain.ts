@@ -1,3 +1,14 @@
+// Pain context types
+export type PainContext =
+  | "sitting"
+  | "sleeping"
+  | "standing"
+  | "working"
+  | "travelling"
+  | "exercising"
+  | "resting"
+  | "other";
+
 // Pain tracking types
 export interface PainLog {
   id: string;
@@ -11,6 +22,7 @@ export interface PainLog {
   triggers?: string[];
 
   // Context
+  context?: PainContext; // Standardized activity context
   activity?: string; // What were you doing?
   position?: string; // sitting, standing, lying, etc.
   duration?: number; // How long in minutes

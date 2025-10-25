@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { User } from "@/types/user";
+import type { User, UserDocument } from "@/types/user";
 import {
   dbManager,
   STORES,
@@ -19,6 +19,9 @@ interface UserState {
   updateUser: (updates: Partial<User>) => void;
   updateMedicalProfile: (updates: Partial<User["medicalProfile"]>) => void;
   updatePreferences: (updates: Partial<User["preferences"]>) => void;
+  addDocument: (doc: Omit<UserDocument, "id" | "uploadedAt">) => Promise<void>;
+  updateDocument: (id: string, updates: Partial<UserDocument>) => Promise<void>;
+  deleteDocument: (id: string) => Promise<void>;
   clearError: () => void;
   initializeUser: () => Promise<void>;
   syncToDB: () => Promise<void>;
@@ -30,6 +33,7 @@ const DEFAULT_USER: User = {
   name: "Haneef Shaikh",
   email: "haneef@example.com",
   dateOfBirth: new Date("1990-01-01"),
+  documents: [],
   medicalProfile: {
     conditions: ["cervical lordosis", "disc bulges C4-C5, C5-C6"],
     sittingTolerance: 15,
@@ -191,6 +195,59 @@ export const useUserStore = create<UserState>()(
           };
           set({ user: updatedUser });
           get().syncToDB();
+        }
+      },
+
+      // Add document
+      addDocument: async (doc) => {
+        const currentUser = get().user;
+        if (currentUser) {
+          const newDoc: UserDocument = {
+            ...doc,
+            id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            uploadedAt: new Date(),
+          };
+          const updatedUser = {
+            ...currentUser,
+            documents: [newDoc, ...(currentUser.documents || [])],
+            updatedAt: new Date(),
+          };
+          set({ user: updatedUser });
+          await get().syncToDB();
+        }
+      },
+
+      // Update document
+      updateDocument: async (id, updates) => {
+        const currentUser = get().user;
+        if (currentUser) {
+          const updatedDocs = (currentUser.documents || []).map((doc) =>
+            doc.id === id ? { ...doc, ...updates } : doc
+          );
+          const updatedUser = {
+            ...currentUser,
+            documents: updatedDocs,
+            updatedAt: new Date(),
+          };
+          set({ user: updatedUser });
+          await get().syncToDB();
+        }
+      },
+
+      // Delete document
+      deleteDocument: async (id) => {
+        const currentUser = get().user;
+        if (currentUser) {
+          const updatedDocs = (currentUser.documents || []).filter(
+            (doc) => doc.id !== id
+          );
+          const updatedUser = {
+            ...currentUser,
+            documents: updatedDocs,
+            updatedAt: new Date(),
+          };
+          set({ user: updatedUser });
+          await get().syncToDB();
         }
       },
 

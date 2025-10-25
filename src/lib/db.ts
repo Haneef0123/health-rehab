@@ -6,7 +6,7 @@ import type { PainLog } from "@/types/pain";
 import { SCHEMA_VERSION } from "./constants";
 
 const DB_NAME = "health-rehab-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incremented to fix exercise sessions index
 
 // Store names
 export const STORES = {
@@ -43,71 +43,103 @@ export async function initDB(): Promise<IDBDatabase | null> {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
+      const oldVersion = event.oldVersion;
+      const transaction = (event.target as IDBOpenDBRequest).transaction;
 
-      // Users store
-      if (!db.objectStoreNames.contains(STORES.USERS)) {
-        const userStore = db.createObjectStore(STORES.USERS, { keyPath: "id" });
-        userStore.createIndex("email", "email", { unique: true });
-        userStore.createIndex("createdAt", "createdAt");
+      // Version 1: Initial schema
+      if (oldVersion < 1) {
+        // Users store
+        if (!db.objectStoreNames.contains(STORES.USERS)) {
+          const userStore = db.createObjectStore(STORES.USERS, {
+            keyPath: "id",
+          });
+          userStore.createIndex("email", "email", { unique: true });
+          userStore.createIndex("createdAt", "createdAt");
+        }
+
+        // Pain logs store
+        if (!db.objectStoreNames.contains(STORES.PAIN_LOGS)) {
+          const painStore = db.createObjectStore(STORES.PAIN_LOGS, {
+            keyPath: "id",
+          });
+          painStore.createIndex("userId", "userId");
+          painStore.createIndex("timestamp", "timestamp");
+          painStore.createIndex("userId_timestamp", ["userId", "timestamp"]);
+        }
+
+        // Exercise sessions store
+        if (!db.objectStoreNames.contains(STORES.EXERCISE_SESSIONS)) {
+          const sessionStore = db.createObjectStore(STORES.EXERCISE_SESSIONS, {
+            keyPath: "id",
+          });
+          sessionStore.createIndex("userId", "userId");
+          sessionStore.createIndex("exerciseId", "exerciseId");
+          sessionStore.createIndex("date", "date");
+          sessionStore.createIndex("userId_date", ["userId", "date"]);
+        }
+
+        // Diet entries store
+        if (!db.objectStoreNames.contains(STORES.DIET_ENTRIES)) {
+          const dietStore = db.createObjectStore(STORES.DIET_ENTRIES, {
+            keyPath: "id",
+          });
+          dietStore.createIndex("userId", "userId");
+          dietStore.createIndex("date", "date");
+          dietStore.createIndex("userId_date", ["userId", "date"]);
+        }
+
+        // Medications store
+        if (!db.objectStoreNames.contains(STORES.MEDICATIONS)) {
+          const medStore = db.createObjectStore(STORES.MEDICATIONS, {
+            keyPath: "id",
+          });
+          medStore.createIndex("userId", "userId");
+          medStore.createIndex("active", "active");
+        }
+
+        // Medication logs store
+        if (!db.objectStoreNames.contains(STORES.MEDICATION_LOGS)) {
+          const medLogStore = db.createObjectStore(STORES.MEDICATION_LOGS, {
+            keyPath: "id",
+          });
+          medLogStore.createIndex("userId", "userId");
+          medLogStore.createIndex("medicationId", "medicationId");
+          medLogStore.createIndex("scheduledTime", "scheduledTime");
+          medLogStore.createIndex("userId_scheduledTime", [
+            "userId",
+            "scheduledTime",
+          ]);
+        }
+
+        // Settings store (key-value pairs)
+        if (!db.objectStoreNames.contains(STORES.SETTINGS)) {
+          db.createObjectStore(STORES.SETTINGS, { keyPath: "key" });
+        }
       }
 
-      // Pain logs store
-      if (!db.objectStoreNames.contains(STORES.PAIN_LOGS)) {
-        const painStore = db.createObjectStore(STORES.PAIN_LOGS, {
-          keyPath: "id",
-        });
-        painStore.createIndex("userId", "userId");
-        painStore.createIndex("timestamp", "timestamp");
-        painStore.createIndex("userId_timestamp", ["userId", "timestamp"]);
-      }
+      // Version 2: Fix exercise sessions indices
+      if (oldVersion < 2 && transaction) {
+        if (db.objectStoreNames.contains(STORES.EXERCISE_SESSIONS)) {
+          const sessionStore = transaction.objectStore(
+            STORES.EXERCISE_SESSIONS
+          );
 
-      // Exercise sessions store
-      if (!db.objectStoreNames.contains(STORES.EXERCISE_SESSIONS)) {
-        const sessionStore = db.createObjectStore(STORES.EXERCISE_SESSIONS, {
-          keyPath: "id",
-        });
-        sessionStore.createIndex("userId", "userId");
-        sessionStore.createIndex("exerciseId", "exerciseId");
-        sessionStore.createIndex("startTime", "startTime");
-        sessionStore.createIndex("userId_startTime", ["userId", "startTime"]);
-      }
+          // Remove old indices if they exist
+          if (sessionStore.indexNames.contains("startTime")) {
+            sessionStore.deleteIndex("startTime");
+          }
+          if (sessionStore.indexNames.contains("userId_startTime")) {
+            sessionStore.deleteIndex("userId_startTime");
+          }
 
-      // Diet entries store
-      if (!db.objectStoreNames.contains(STORES.DIET_ENTRIES)) {
-        const dietStore = db.createObjectStore(STORES.DIET_ENTRIES, {
-          keyPath: "id",
-        });
-        dietStore.createIndex("userId", "userId");
-        dietStore.createIndex("date", "date");
-        dietStore.createIndex("userId_date", ["userId", "date"]);
-      }
-
-      // Medications store
-      if (!db.objectStoreNames.contains(STORES.MEDICATIONS)) {
-        const medStore = db.createObjectStore(STORES.MEDICATIONS, {
-          keyPath: "id",
-        });
-        medStore.createIndex("userId", "userId");
-        medStore.createIndex("active", "active");
-      }
-
-      // Medication logs store
-      if (!db.objectStoreNames.contains(STORES.MEDICATION_LOGS)) {
-        const medLogStore = db.createObjectStore(STORES.MEDICATION_LOGS, {
-          keyPath: "id",
-        });
-        medLogStore.createIndex("userId", "userId");
-        medLogStore.createIndex("medicationId", "medicationId");
-        medLogStore.createIndex("scheduledTime", "scheduledTime");
-        medLogStore.createIndex("userId_scheduledTime", [
-          "userId",
-          "scheduledTime",
-        ]);
-      }
-
-      // Settings store (key-value pairs)
-      if (!db.objectStoreNames.contains(STORES.SETTINGS)) {
-        db.createObjectStore(STORES.SETTINGS, { keyPath: "key" });
+          // Add new indices with correct field names
+          if (!sessionStore.indexNames.contains("date")) {
+            sessionStore.createIndex("date", "date");
+          }
+          if (!sessionStore.indexNames.contains("userId_date")) {
+            sessionStore.createIndex("userId_date", ["userId", "date"]);
+          }
+        }
       }
     };
   });

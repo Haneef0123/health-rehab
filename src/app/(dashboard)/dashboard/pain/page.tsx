@@ -30,29 +30,12 @@ type DateRange = "week" | "month" | "all";
 export default function PainPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>("week");
   const { user } = useUserStore();
-  const { logs, currentPainLevel, fetchLogs, deleteLog } = usePainStore();
+  const { logs, currentPainLevel, deleteLog, _isHydrated, isLoading } =
+    usePainStore();
 
-  // Initialize logs on mount
-  useEffect(() => {
-    const init = async () => {
-      setIsLoading(true);
-      try {
-        await fetchLogs();
-      } catch (error) {
-        toast({
-          variant: "error",
-          title: "Error",
-          description: "Failed to load pain logs",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    init();
-  }, [fetchLogs]);
+  // No need to manually initialize - store auto-hydrates from IndexedDB
 
   // Filter logs by date range
   const filteredLogs = useMemo(() => {

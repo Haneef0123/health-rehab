@@ -11,12 +11,14 @@ import { PainScaleSelector } from "./pain-scale-selector";
 import { usePainStore, useUserStore } from "@/stores";
 import { USER_ID_FALLBACK } from "@/lib/constants";
 import { X } from "lucide-react";
+import type { PainContext } from "@/types/pain";
 
 const painLogSchema = z.object({
   level: z.number().min(0).max(10),
   location: z.array(z.string()).min(1, "Please select at least one location"),
   type: z.array(z.string()).optional(),
   triggers: z.array(z.string()).optional(),
+  context: z.string().optional(),
   activities: z.string().optional(),
   medications: z.string().optional(),
   notes: z.string().optional(),
@@ -58,6 +60,17 @@ const COMMON_TRIGGERS = [
   "Weather",
 ];
 
+const PAIN_CONTEXTS: { value: PainContext; label: string }[] = [
+  { value: "sitting", label: "Sitting" },
+  { value: "sleeping", label: "Sleeping" },
+  { value: "standing", label: "Standing" },
+  { value: "working", label: "Working" },
+  { value: "travelling", label: "Travelling" },
+  { value: "exercising", label: "Exercising" },
+  { value: "resting", label: "Resting" },
+  { value: "other", label: "Other" },
+];
+
 export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
   const { addLog } = usePainStore();
   const { user } = useUserStore();
@@ -65,6 +78,9 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedContext, setSelectedContext] = useState<
+    PainContext | undefined
+  >();
 
   const {
     register,
@@ -79,6 +95,7 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
       location: [],
       type: [],
       triggers: [],
+      context: undefined,
       activities: "",
       medications: "",
       notes: "",
@@ -120,6 +137,7 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
         location: data.location as any[], // Type assertion for now
         type: data.type as any[], // Type assertion for now
         triggers: data.triggers || [],
+        context: selectedContext,
         activity: data.activities || undefined,
         notes: data.notes || undefined,
         timestamp: new Date(),
@@ -207,6 +225,30 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
               onClick={() => toggleType(type)}
             >
               {type}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Context */}
+      <div>
+        <Label>Activity Context</Label>
+        <p className="text-xs text-gray-500 mt-1">
+          What were you doing when the pain occurred?
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {PAIN_CONTEXTS.map(({ value, label }) => (
+            <Button
+              key={value}
+              type="button"
+              variant={selectedContext === value ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setSelectedContext(value);
+                setValue("context", value);
+              }}
+            >
+              {label}
             </Button>
           ))}
         </div>

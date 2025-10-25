@@ -42,12 +42,19 @@ import {
 
 type TimeRange = "week" | "month" | "3months";
 
+// Safe date formatter for SSR
+const formatDate = (date: Date | string): string => {
+  if (typeof window === "undefined") return "";
+  return new Date(date).toLocaleDateString();
+};
+
 export default function AnalyticsPage() {
   const { user } = useUserStore();
   const [timeRange, setTimeRange] = useState<TimeRange>("month");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("pain-exercise");
+  const [mounted, setMounted] = useState(false);
 
   // Analytics data state
   const [painExerciseData, setPainExerciseData] = useState<any>(null);
@@ -56,8 +63,14 @@ export default function AnalyticsPage() {
   const [weeklyReport, setWeeklyReport] = useState<any>(null);
   const [predictiveInsights, setPredictiveInsights] = useState<any[]>([]);
 
+  // Set mounted state
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const loadAnalytics = async () => {
-    if (!user?.id) return;
+    // Skip during SSR
+    if (typeof window === "undefined" || !user?.id) return;
 
     const now = new Date();
     let startDate = new Date();
@@ -106,14 +119,27 @@ export default function AnalyticsPage() {
     }
   };
 
+  // Set mounted state
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // Only load analytics if we're in the browser and have a user
+    if (typeof window === "undefined" || !user?.id || !mounted) return;
     loadAnalytics();
-  }, [user?.id, timeRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, timeRange, mounted]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     loadAnalytics();
   };
+
+  // Prevent SSR hydration mismatch
+  if (!mounted) {
+    return <ComponentLoader />;
+  }
 
   if (loading && !painExerciseData) {
     return <ComponentLoader />;
@@ -177,8 +203,8 @@ export default function AnalyticsPage() {
                 <CardTitle>Weekly Report</CardTitle>
               </div>
               <Badge variant="secondary">
-                {new Date(weeklyReport.weekStart).toLocaleDateString()} -{" "}
-                {new Date(weeklyReport.weekEnd).toLocaleDateString()}
+                {formatDate(weeklyReport.weekStart)} -{" "}
+                {formatDate(weeklyReport.weekEnd)}
               </Badge>
             </div>
             <CardDescription>
@@ -356,7 +382,7 @@ export default function AnalyticsPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-3xl font-bold">
-                        {painExerciseData.avgPainBefore.toFixed(1)}
+                        {painExerciseData.averagePainBefore.toFixed(1)}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         Average pain level
@@ -372,7 +398,7 @@ export default function AnalyticsPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-3xl font-bold">
-                        {painExerciseData.avgPainAfter.toFixed(1)}
+                        {painExerciseData.averagePainAfter.toFixed(1)}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         Average pain level
@@ -548,16 +574,15 @@ export default function AnalyticsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {dietPainData.dayByDay.length > 0 ? (
+                    {dietPainData.dayByDayData.length > 0 ? (
                       <div className="space-y-2">
                         <div className="flex gap-1 items-end h-32">
-                          {dietPainData.dayByDay
+                          {dietPainData.dayByDayData
                             .slice(-30)
                             .map((day: any, idx: number) => {
-                              const height =
-                                (day.compliancePercentage / 100) * 100;
-                              const isGood = day.compliancePercentage >= 80;
-                              const isBad = day.compliancePercentage < 60;
+                              const height = (day.compliance / 100) * 100;
+                              const isGood = day.compliance >= 80;
+                              const isBad = day.compliance < 60;
                               return (
                                 <div
                                   key={idx}
@@ -575,17 +600,11 @@ export default function AnalyticsPage() {
                                     style={{ height: `${height}%` }}
                                   >
                                     <div className="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
-                                      {new Date(day.date).toLocaleDateString(
-                                        "en-US",
-                                        {
-                                          month: "short",
-                                          day: "numeric",
-                                        }
-                                      )}
+                                      {formatDate(day.date)}
                                       <br />
-                                      {day.compliancePercentage}% compliance
+                                      {day.compliance}% compliance
                                       <br />
-                                      Pain: {day.avgPainLevel.toFixed(1)}
+                                      Pain: {day.painLevel.toFixed(1)}
                                     </div>
                                   </div>
                                 </div>
@@ -594,9 +613,9 @@ export default function AnalyticsPage() {
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>
-                            {new Date(
-                              dietPainData.dayByDay[0]?.date
-                            ).toLocaleDateString()}
+                            {dietPainData.dayByDayData[0]?.date
+                              ? formatDate(dietPainData.dayByDayData[0].date)
+                              : ""}
                           </span>
                           <span>Today</span>
                         </div>
@@ -678,12 +697,12 @@ export default function AnalyticsPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-3xl font-bold">
-                        {medicationData.adherenceRate}%
+                        {medicationData.overallAdherence}%
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {medicationData.adherenceRate >= 80
+                        {medicationData.overallAdherence >= 80
                           ? "Excellent adherence"
-                          : medicationData.adherenceRate >= 60
+                          : medicationData.overallAdherence >= 60
                           ? "Good adherence"
                           : "Needs improvement"}
                       </p>
@@ -698,12 +717,12 @@ export default function AnalyticsPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-3xl font-bold capitalize">
-                        {medicationData.impactOnPain}
+                        {medicationData.adherenceImpact}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {medicationData.impactOnPain === "positive"
+                        {medicationData.adherenceImpact === "positive"
                           ? "Medications are helping"
-                          : medicationData.impactOnPain === "negative"
+                          : medicationData.adherenceImpact === "negative"
                           ? "Review with doctor"
                           : "No clear impact yet"}
                       </p>
@@ -718,8 +737,8 @@ export default function AnalyticsPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-3xl font-bold">
-                        {medicationData.missedDosePainIncrease > 0 ? "+" : ""}
-                        {medicationData.missedDosePainIncrease.toFixed(1)}
+                        {medicationData.missedDosesPainIncrease > 0 ? "+" : ""}
+                        {medicationData.missedDosesPainIncrease.toFixed(1)}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         Pain on missed dose days

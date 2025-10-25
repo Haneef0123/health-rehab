@@ -21,6 +21,10 @@ import {
   Dumbbell,
   ArrowRight,
   Loader2,
+  LineChart,
+  AlertTriangle,
+  Calendar,
+  Droplet,
 } from "lucide-react";
 import {
   useUserStore,
@@ -28,22 +32,55 @@ import {
   useExerciseStore,
   useDietStore,
 } from "@/stores";
+import { analyzeFlareUpCauses } from "@/lib/analytics";
+import type { FlareUpCause } from "@/lib/analytics";
 
 export default function DashboardPage() {
   const [showQuickLog, setShowQuickLog] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [flareUpCauses, setFlareUpCauses] = useState<FlareUpCause[]>([]);
+  const [missedDietDays, setMissedDietDays] = useState<Date[]>([]);
 
   const { user } = useUserStore();
-  const { logs: painLogs, fetchLogs } = usePainStore();
-  const { activeSession, sessions } = useExerciseStore();
-  const { meals, fetchMeals } = useDietStore();
+  const { logs: painLogs, _isHydrated: painHydrated } = usePainStore();
+  const {
+    activeSession,
+    sessions,
+    _isHydrated: exerciseHydrated,
+  } = useExerciseStore();
+  const {
+    meals,
+    waterLogs,
+    getMissedDietDays,
+    _isHydrated: dietHydrated,
+  } = useDietStore();
 
-  // Load data on mount
+  // Load data on mount - only fetch analytics and computed data
   useEffect(() => {
     const loadData = async () => {
+      // Wait for all stores to hydrate
+      if (!painHydrated || !exerciseHydrated || !dietHydrated) {
+        return;
+      }
+
       setLoading(true);
       try {
-        await Promise.all([fetchLogs(), fetchMeals()]);
+        // Load flare-up causes
+        const endDate = new Date();
+        const startDate = new Date(
+          endDate.getTime() - 14 * 24 * 60 * 60 * 1000
+        );
+        const causes = await analyzeFlareUpCauses(
+          user?.id || "user-1",
+          startDate,
+          endDate
+        );
+        setFlareUpCauses(causes);
+
+        // Load missed diet days (last 7 days)
+        const dietStart = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const missed = await getMissedDietDays(dietStart, endDate);
+        setMissedDietDays(missed);
       } catch (error) {
         console.error("Error loading dashboard data:", error);
       } finally {
@@ -51,7 +88,13 @@ export default function DashboardPage() {
       }
     };
     loadData();
-  }, [fetchLogs, fetchMeals]);
+  }, [
+    painHydrated,
+    exerciseHydrated,
+    dietHydrated,
+    user?.id,
+    getMissedDietDays,
+  ]);
 
   // Calculate current pain level (most recent log from today)
   const currentPainLevel = useMemo(() => {
@@ -101,6 +144,67 @@ export default function DashboardPage() {
 
     return Math.round(((firstAvg - secondAvg) / firstAvg) * 100);
   }, [painLogs]);
+
+  // Get last 14 days of pain logs for chart
+  const painChartData = useMemo(() => {
+    const now = new Date();
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    return painLogs
+      .filter((log) => new Date(log.timestamp) >= twoWeeksAgo)
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      )
+      .slice(-14);
+  }, [painLogs]);
+
+  // Get upcoming exercise routines (next 3 days)
+  // For now, show recent sessions as "routines"
+  const upcomingRoutines = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Get recent completed sessions (last 7 days)
+    const recentSessions = sessions
+      .filter((s) => {
+        const sessionDate = new Date(s.date);
+        sessionDate.setHours(0, 0, 0, 0);
+        return (
+          sessionDate >= new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000) &&
+          s.status === "completed"
+        );
+      })
+      .slice(0, 3);
+
+    return recentSessions.map((s) => ({
+      id: s.id,
+      name: `Exercise Session`,
+      exercises: s.completed || [],
+      frequency: "Recent",
+      isActive: true,
+    }));
+  }, [sessions]);
+
+  // Calculate diet compliance percentage
+  const dietCompliance = useMemo(() => {
+    const totalDays = 7;
+    const missedCount = missedDietDays.length;
+    return Math.round(((totalDays - missedCount) / totalDays) * 100);
+  }, [missedDietDays]);
+
+  // Calculate today's water intake
+  const todayWaterIntake = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayLog = waterLogs.find((log) => {
+      const logDate = new Date(log.date);
+      logDate.setHours(0, 0, 0, 0);
+      return logDate.getTime() === today.getTime();
+    });
+
+    return todayLog?.glasses || 0;
+  }, [waterLogs]);
 
   // Loading state
   if (loading) {
@@ -231,6 +335,208 @@ export default function DashboardPage() {
               )}
             </div>
             <p className="mt-1 text-xs text-gray-600">Pain reduction</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Analytics Grid - Pain Trend & Flare-up Causes */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Pain Trend Chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <LineChart className="h-4 w-4" /> Pain Trend (Last 14 Days)
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Track your pain levels over time
+              </CardDescription>
+            </div>
+            <Link href="/dashboard/pain">
+              <Button variant="ghost" size="sm">
+                View Details
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {painChartData.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <LineChart className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm">No pain data available</p>
+              </div>
+            ) : (
+              <div className="flex gap-1 h-24 items-end">
+                {painChartData.map((log, i) => {
+                  const height = (log.level / 10) * 100;
+                  const color =
+                    log.level >= 7
+                      ? "bg-red-500"
+                      : log.level >= 4
+                      ? "bg-orange-500"
+                      : "bg-green-500";
+                  return (
+                    <div
+                      key={log.id}
+                      className={`flex-1 ${color} rounded-t transition-all hover:opacity-80`}
+                      style={{ height: `${height}%`, minHeight: "4px" }}
+                      title={`${new Date(
+                        log.timestamp
+                      ).toLocaleDateString()}: Level ${log.level}`}
+                    />
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex justify-between text-xs text-gray-500 mt-2">
+              <span>2 weeks ago</span>
+              <span>Today</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Flare-Up Causes */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-orange-500" /> Top Flare-Up
+              Triggers
+            </CardTitle>
+            <CardDescription>Main causes of high pain</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {flareUpCauses.length === 0 ? (
+              <p className="text-xs text-gray-500 py-4">
+                Insufficient high-pain data
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {flareUpCauses.map((cause) => (
+                  <li
+                    key={cause.trigger}
+                    className="flex justify-between items-center text-xs"
+                  >
+                    <span className="font-medium truncate flex-1">
+                      {cause.trigger}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600">
+                        {cause.occurrences}×
+                      </span>
+                      <div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-orange-500"
+                          style={{
+                            width: `${
+                              (cause.occurrences /
+                                flareUpCauses[0].occurrences) *
+                              100
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Diet & Exercise Schedule Row */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Diet Compliance */}
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Droplet className="h-4 w-4 text-blue-500" /> Diet Compliance
+              </CardTitle>
+              <CardDescription>Last 7 days tracking</CardDescription>
+            </div>
+            <Link href="/dashboard/diet">
+              <Button variant="ghost" size="sm">
+                View Diet
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <div className="text-4xl font-bold text-gray-900">
+                  {dietCompliance}%
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Compliance rate</p>
+              </div>
+              <div className="flex-1">
+                {missedDietDays.length > 0 && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-xs font-medium text-orange-800">
+                      {missedDietDays.length} day
+                      {missedDietDays.length > 1 ? "s" : ""} without logging
+                    </p>
+                    <p className="text-xs text-orange-600 mt-1">
+                      Keep tracking to maintain progress
+                    </p>
+                  </div>
+                )}
+                {missedDietDays.length === 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-xs font-medium text-green-800">
+                      Perfect tracking!
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      All days logged this week
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Exercise Schedule */}
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-purple-500" /> Upcoming
+                Exercises
+              </CardTitle>
+              <CardDescription>Scheduled routines</CardDescription>
+            </div>
+            <Link href="/dashboard/exercises">
+              <Button variant="ghost" size="sm">
+                View All
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {upcomingRoutines.length === 0 ? (
+              <p className="text-xs text-gray-500 py-4">
+                No active routines scheduled
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {upcomingRoutines.map((routine) => (
+                  <li
+                    key={routine.id}
+                    className="flex items-start gap-2 text-xs"
+                  >
+                    <Dumbbell className="h-3 w-3 text-purple-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{routine.name}</p>
+                      <p className="text-gray-500">
+                        {routine.exercises.length} exercises
+                      </p>
+                    </div>
+                    <span className="text-gray-600 whitespace-nowrap">
+                      {routine.frequency}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>

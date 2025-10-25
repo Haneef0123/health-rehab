@@ -45,10 +45,12 @@ export default function DietPage() {
     waterLogs,
     addMeal,
     addWaterIntake,
-    fetchMeals,
-    fetchWaterLogs,
     deleteMeal,
     updateMeal,
+    fetchMeals,
+    fetchWaterLogs,
+    _isHydrated,
+    isLoading: storeLoading,
   } = useDietStore();
   const { showAlert, AlertDialog } = useAlertDialog();
   const today = new Date().toISOString().split("T")[0];
@@ -57,7 +59,6 @@ export default function DietPage() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [newFood, setNewFood] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isAddingWater, setIsAddingWater] = useState(false);
   const [isAddingMeal, setIsAddingMeal] = useState(false);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -79,12 +80,17 @@ export default function DietPage() {
   const [foodPreparation, setFoodPreparation] =
     useState<(typeof PREPARATION_METHODS)[number]>("raw");
 
-  // Load data when date changes
+  // Reload data when date changes or when store hydrates
   useEffect(() => {
+    // Wait for store to hydrate
+    if (!_isHydrated) {
+      return;
+    }
+
     const loadData = async () => {
-      setIsLoading(true);
       try {
         const date = new Date(selectedDate);
+        // Fetch fresh data for the selected date
         await Promise.all([fetchMeals(date), fetchWaterLogs(date, date)]);
       } catch (error) {
         toast({
@@ -92,12 +98,10 @@ export default function DietPage() {
           title: "Error",
           description: "Failed to load data. Please try again.",
         });
-      } finally {
-        setIsLoading(false);
       }
     };
     loadData();
-  }, [selectedDate, fetchMeals, fetchWaterLogs]);
+  }, [selectedDate, _isHydrated, fetchMeals, fetchWaterLogs]);
 
   // Get today's water log
   const todayWaterLog = waterLogs.find((log) => {
@@ -686,7 +690,7 @@ export default function DietPage() {
             )}
 
             {/* Meals list */}
-            {isLoading ? (
+            {storeLoading || !_isHydrated ? (
               <div className="text-center py-12">
                 <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-primary" />
                 <p className="text-muted-foreground">Loading meals...</p>

@@ -37,6 +37,8 @@ export interface DietPainCorrelation {
   averagePainLevel: number;
   correlationStrength: "strong" | "moderate" | "weak" | "none";
   daysAnalyzed: number;
+  highCompliancePain: number;
+  lowCompliancePain: number;
   insights: string[];
   dayByDayData: {
     date: Date;
@@ -51,6 +53,9 @@ export interface MedicationAdherenceImpact {
   averagePainLevel: number;
   adherenceImpact: "positive" | "neutral" | "negative";
   missedDosesPainIncrease: number;
+  avgPainWithMeds: number;
+  avgPainMissedDoses: number;
+  daysAnalyzed: number;
   insights: string[];
 }
 
@@ -109,6 +114,78 @@ export interface PredictiveInsight {
   prediction: string;
   recommendation: string;
   basedOn: string;
+}
+
+export interface FlareUpCause {
+  trigger: string;
+  occurrences: number;
+  avgPain: number;
+  recentContribution: number;
+  context?: string;
+}
+
+/**
+ * Analyze main causes of pain flare-ups based on high-pain logs
+ */
+export async function analyzeFlareUpCauses(
+  userId: string,
+  startDate: Date,
+  endDate: Date,
+  highPainThreshold: number = 6
+): Promise<FlareUpCause[]> {
+  try {
+    const painStore = await dbManager.getStore<PainLog>(STORES.PAIN_LOGS);
+    if (!painStore) return [];
+
+    const range = IDBKeyRange.bound([userId, startDate], [userId, endDate]);
+    const logs = await painStore.getAllByIndex("userId_timestamp", range);
+
+    // Filter for high pain events
+    const highPainLogs = logs.filter((l) => l.level >= highPainThreshold);
+
+    if (highPainLogs.length === 0) return [];
+
+    // Calculate recent cutoff (last 3 days)
+    const recentCutoff = new Date(endDate.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+    // Aggregate by trigger
+    const counts: Record<
+      string,
+      { total: number; sumPain: number; recent: number; contexts: Set<string> }
+    > = {};
+
+    for (const log of highPainLogs) {
+      const triggers = log.triggers || [];
+      const context = log.context || "unspecified";
+
+      for (const t of triggers) {
+        if (!counts[t]) {
+          counts[t] = { total: 0, sumPain: 0, recent: 0, contexts: new Set() };
+        }
+        counts[t].total += 1;
+        counts[t].sumPain += log.level;
+        counts[t].contexts.add(context);
+        if (new Date(log.timestamp) >= recentCutoff) {
+          counts[t].recent += 1;
+        }
+      }
+    }
+
+    // Convert to array and sort by occurrences
+    return Object.entries(counts)
+      .map(([trigger, data]) => ({
+        trigger,
+        occurrences: data.total,
+        avgPain: data.sumPain / data.total,
+        recentContribution: data.recent / data.total,
+        context: Array.from(data.contexts).join(", "),
+      }))
+      .sort((a, b) => b.occurrences - a.occurrences)
+      .slice(0, 5);
+  } catch (error) {
+    console.error("Failed to analyze flare-up causes:", error);
+    return [];
+  }
 }
 
 /**
@@ -281,6 +358,8 @@ export async function analyzeDietPainCorrelation(
         averagePainLevel: 0,
         correlationStrength: "none",
         daysAnalyzed: 0,
+        highCompliancePain: 0,
+        lowCompliancePain: 0,
         insights: [],
         dayByDayData: [],
       };
@@ -298,6 +377,21 @@ export async function analyzeDietPainCorrelation(
         averagePainLevel: 0,
         correlationStrength: "none",
         daysAnalyzed: 0,
+        highCompliancePain: 0,
+        lowCompliancePain: 0,
+        insights: [],
+        dayByDayData: [],
+      };
+    }
+    if (!painStore) {
+      return {
+        period: { start: startDate, end: endDate },
+        averageCompliance: 0,
+        averagePainLevel: 0,
+        correlationStrength: "none",
+        daysAnalyzed: 0,
+        highCompliancePain: 0,
+        lowCompliancePain: 0,
         insights: [],
         dayByDayData: [],
       };
@@ -327,13 +421,16 @@ export async function analyzeDietPainCorrelation(
 
     // Build day-by-day data
     const dayByDayData = dietLogs
+      .filter(
+        (dietLog) => dietLog.summary && dietLog.summary.compliance !== undefined
+      )
       .map((dietLog) => {
         const dateKey = new Date(dietLog.date).toISOString().split("T")[0];
         const painLevel = avgPainByDate.get(dateKey) || 0;
 
         return {
           date: dietLog.date,
-          compliance: dietLog.summary.compliance,
+          compliance: dietLog.summary!.compliance,
           painLevel,
         };
       })
@@ -419,6 +516,8 @@ export async function analyzeDietPainCorrelation(
       averagePainLevel: Math.round(avgPain * 10) / 10,
       correlationStrength,
       daysAnalyzed: dayByDayData.length,
+      highCompliancePain: Math.round(avgPainHighCompliance * 10) / 10,
+      lowCompliancePain: Math.round(avgPainLowCompliance * 10) / 10,
       insights,
       dayByDayData: dayByDayData.slice(-30), // Last 30 days
     };
@@ -448,6 +547,9 @@ export async function analyzeMedicationAdherenceImpact(
         averagePainLevel: 0,
         adherenceImpact: "neutral",
         missedDosesPainIncrease: 0,
+        avgPainWithMeds: 0,
+        avgPainMissedDoses: 0,
+        daysAnalyzed: 0,
         insights: [],
       };
     }
@@ -467,6 +569,9 @@ export async function analyzeMedicationAdherenceImpact(
         averagePainLevel: 0,
         adherenceImpact: "neutral",
         missedDosesPainIncrease: 0,
+        avgPainWithMeds: 0,
+        avgPainMissedDoses: 0,
+        daysAnalyzed: 0,
         insights: [],
       };
     }
@@ -580,6 +685,9 @@ export async function analyzeMedicationAdherenceImpact(
       averagePainLevel: Math.round(avgPain * 10) / 10,
       adherenceImpact,
       missedDosesPainIncrease: Math.round(missedDosesPainIncrease * 10) / 10,
+      avgPainWithMeds: Math.round(avgPainTakenDays * 10) / 10,
+      avgPainMissedDoses: Math.round(avgPainMissedDays * 10) / 10,
+      daysAnalyzed: painByDate.size,
       insights,
     };
   } catch (error) {
@@ -752,10 +860,13 @@ export async function generateWeeklyReport(
     );
     const dietLogs = await dietStore.getAllByIndex("userId_date", dietRange);
 
+    const validDietLogs = dietLogs.filter(
+      (l) => l.summary && l.summary.compliance !== undefined
+    );
     const avgCompliance =
-      dietLogs.length > 0
-        ? dietLogs.reduce((sum, l) => sum + l.summary.compliance, 0) /
-          dietLogs.length
+      validDietLogs.length > 0
+        ? validDietLogs.reduce((sum, l) => sum + l.summary!.compliance, 0) /
+          validDietLogs.length
         : 0;
 
     // Water intake
@@ -1016,13 +1127,16 @@ export async function generatePredictiveInsights(
     const dietRange = IDBKeyRange.bound([userId, startDate], [userId, endDate]);
     const dietLogs = await dietStore.getAllByIndex("userId_date", dietRange);
 
+    const validDietLogs = dietLogs.filter(
+      (l) => l.summary && l.summary.compliance !== undefined
+    );
     const avgCompliance =
-      dietLogs.length > 0
-        ? dietLogs.reduce((sum, l) => sum + l.summary.compliance, 0) /
-          dietLogs.length
+      validDietLogs.length > 0
+        ? validDietLogs.reduce((sum, l) => sum + l.summary!.compliance, 0) /
+          validDietLogs.length
         : 0;
 
-    if (avgCompliance < 60 && dietLogs.length > 5) {
+    if (avgCompliance < 60 && validDietLogs.length > 5) {
       insights.push({
         category: "diet",
         pattern: "Low diet compliance trend",

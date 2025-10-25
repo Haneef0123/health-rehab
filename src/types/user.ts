@@ -13,9 +13,30 @@ export interface User {
   // Preferences
   preferences: UserPreferences;
 
+  // Documents
+  documents: UserDocument[];
+
   // Metadata
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface UserDocument {
+  id: string;
+  type:
+    | "report"
+    | "medication"
+    | "imaging"
+    | "prescription"
+    | "insurance"
+    | "other";
+  title: string;
+  fileName: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedAt: Date;
+  notes?: string;
+  tags?: string[];
 }
 
 export interface MedicalProfile {
