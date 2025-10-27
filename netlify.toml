@@ -1,7 +1,9 @@
 [build]
-  command = "npm run build"
+  command = "bun install && bun run build"
   publish = ".next"
 
 [build.environment]
-  NODE_VERSION = "18.20.8"
-  NPM_FLAGS = "--include=dev --no-progress"
+  # Pin build to Node 20.x (LTS)
+  NODE_VERSION = "20"
+  # Use Bun for package management
+  NPM_FLAGS = "--version" # This prevents npm from being used
