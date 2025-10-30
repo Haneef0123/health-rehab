@@ -337,18 +337,23 @@ export default function ExerciseDetailPage({
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto space-y-6 px-4 pb-8 pt-6 sm:px-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Button
           variant="ghost"
           onClick={() => router.push("/dashboard/exercises")}
+          className="w-full justify-start sm:w-auto"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Exercises
         </Button>
 
-        <Button onClick={handleStartSession} size="lg" className="gap-2">
+        <Button
+          onClick={handleStartSession}
+          size="lg"
+          className="w-full gap-2 sm:w-auto"
+        >
           <Play className="h-5 w-5" />
           Start Exercise
         </Button>
@@ -357,9 +362,11 @@ export default function ExerciseDetailPage({
       {/* Main Info Card */}
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-2">
-              <CardTitle className="text-3xl">{exercise.name}</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl">
+                {exercise.name}
+              </CardTitle>
               <CardDescription className="text-base">
                 {exercise.description}
               </CardDescription>
@@ -379,7 +386,7 @@ export default function ExerciseDetailPage({
           </div>
 
           {/* Quick Stats */}
-          <div className="flex flex-wrap gap-4 pt-4">
+          <div className="flex flex-col gap-3 pt-4 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Clock className="h-4 w-4" />
               <span>
@@ -388,14 +395,14 @@ export default function ExerciseDetailPage({
               </span>
             </div>
             {exercise.repetitions && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
                 <Repeat className="h-4 w-4" />
                 <span>
                   {exercise.repetitions} reps × {exercise.sets} sets
                 </span>
               </div>
             )}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
               <Target className="h-4 w-4" />
               <span className="capitalize">{exercise.category}</span>
             </div>
@@ -629,17 +636,14 @@ export default function ExerciseDetailPage({
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex gap-4 sticky bottom-6 bg-background/80 backdrop-blur-sm p-4 rounded-lg border">
-        <Button onClick={handleStartSession} size="lg" className="flex-1 gap-2">
+      <div className="sticky bottom-6 flex flex-col gap-3 rounded-lg border bg-background/80 p-4 backdrop-blur-sm sm:max-w-sm">
+        <Button
+          onClick={handleStartSession}
+          size="lg"
+          className="w-full gap-2"
+        >
           <Play className="h-5 w-5" />
           Start Exercise
-        </Button>
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => router.push("/dashboard/exercises")}
-        >
-          Back
         </Button>
       </div>
     </div>
