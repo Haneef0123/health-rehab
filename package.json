@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=18 <21"
+    "node": ">=20 <21"
   },
   "scripts": {
     "dev": "next dev",
@@ -42,6 +42,5 @@
     "tailwindcss": "^4.1.14",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5"
-  },
-  "packageManager": "npm@9.8.1"
+  }
 }
