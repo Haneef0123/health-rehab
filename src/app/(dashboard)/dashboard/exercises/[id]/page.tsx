@@ -636,22 +636,14 @@ export default function ExerciseDetailPage({
       </Card>
 
       {/* Action Buttons */}
-      <div className="sticky bottom-6 flex flex-col gap-3 rounded-lg border bg-background/80 p-4 backdrop-blur-sm sm:flex-row sm:items-center sm:gap-4">
+      <div className="sticky bottom-6 flex flex-col gap-3 rounded-lg border bg-background/80 p-4 backdrop-blur-sm sm:max-w-sm">
         <Button
           onClick={handleStartSession}
           size="lg"
-          className="w-full gap-2 sm:flex-1"
+          className="w-full gap-2"
         >
           <Play className="h-5 w-5" />
           Start Exercise
-        </Button>
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => router.push("/dashboard/exercises")}
-          className="w-full sm:flex-1"
-        >
-          Back
         </Button>
       </div>
     </div>
