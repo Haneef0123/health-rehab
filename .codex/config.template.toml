@@ -1,0 +1,18 @@
+# Copy this file to ~/.codex/config.toml (or merge into your existing config)
+# to let Codex automatically ingest the detailed project doctrine that lives
+# under .specify/memory/ when you launch the CLI from this repository.
+
+project_doc_fallback_filenames = [
+  "constitution.md",
+  "architecture.md",
+  "design-system.md",
+  "roadmap.md"
+]
+
+# You can also merge these settings on the fly:
+#   codex --config project_doc_fallback_filenames='["constitution.md","architecture.md","design-system.md","roadmap.md"]'
+#
+# Codex will still load AGENTS.md at the repository root first; these fallback
+# names ensure that if you drill into .specify/memory or another nested folder,
+# the rich documentation in those markdown files is appended automatically.
+
