@@ -40,7 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Specify AI memory, scripts, templates (ignore all)
-.specify/
+# Specify AI memory - now tracked for Claude Code optimization
+# .specify/ - REMOVED: Now tracking for AI context
+
+# GitHub workflows and VSCode settings
 .github/
 .vscode/
