@@ -108,14 +108,18 @@ function ExerciseSessionContent() {
   };
 
   const handleNextStep = () => {
-    if (exercise && currentStep < exercise.instructions.length - 1) {
+    if (
+      exercise &&
+      exercise.instructions &&
+      currentStep < exercise.instructions.length - 1
+    ) {
       setCurrentStep(currentStep + 1);
     }
   };
 
   const handlePreviousStep = () => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
+      setCurrentStep((prev) => Math.max(0, prev - 1));
     }
   };
 
@@ -308,7 +312,7 @@ function ExerciseSessionContent() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>
-              Step {currentStep + 1} of {exercise.instructions.length}
+              Step {currentStep + 1} of {exercise.instructions?.length ?? 0}
             </CardTitle>
             <div className="flex gap-2">
               <Button
@@ -323,7 +327,10 @@ function ExerciseSessionContent() {
                 variant="outline"
                 size="sm"
                 onClick={handleNextStep}
-                disabled={currentStep === exercise.instructions.length - 1}
+                disabled={
+                  !exercise.instructions ||
+                  currentStep >= exercise.instructions.length - 1
+                }
               >
                 Next
               </Button>
@@ -332,7 +339,7 @@ function ExerciseSessionContent() {
         </CardHeader>
         <CardContent>
           <p className="text-lg leading-relaxed">
-            {exercise.instructions[currentStep]}
+            {exercise.instructions[currentStep] ?? "No instruction available"}
           </p>
         </CardContent>
       </Card>

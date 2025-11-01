@@ -123,6 +123,8 @@ export class DBStore<T extends { id: string }> {
       const store = transaction.objectStore(this.storeName);
       const request = store.add(item);
 
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(new Error("Transaction aborted"));
       request.onsuccess = () => resolve(request.result as string);
       request.onerror = () => reject(request.error);
     });
@@ -134,6 +136,8 @@ export class DBStore<T extends { id: string }> {
       const store = transaction.objectStore(this.storeName);
       const request = store.put(item);
 
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(new Error("Transaction aborted"));
       request.onsuccess = () => resolve(request.result as string);
       request.onerror = () => reject(request.error);
     });
@@ -145,6 +149,8 @@ export class DBStore<T extends { id: string }> {
       const store = transaction.objectStore(this.storeName);
       const request = store.get(id);
 
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(new Error("Transaction aborted"));
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -156,6 +162,8 @@ export class DBStore<T extends { id: string }> {
       const store = transaction.objectStore(this.storeName);
       const request = store.getAll();
 
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(new Error("Transaction aborted"));
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -167,6 +175,8 @@ export class DBStore<T extends { id: string }> {
       const store = transaction.objectStore(this.storeName);
       const request = store.delete(id);
 
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(new Error("Transaction aborted"));
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
@@ -178,6 +188,8 @@ export class DBStore<T extends { id: string }> {
       const store = transaction.objectStore(this.storeName);
       const request = store.clear();
 
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(new Error("Transaction aborted"));
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
@@ -188,13 +200,20 @@ export class DBStore<T extends { id: string }> {
     value: IDBValidKey | IDBKeyRange
   ): Promise<T[]> {
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(this.storeName, "readonly");
-      const store = transaction.objectStore(this.storeName);
-      const index = store.index(indexName);
-      const request = index.getAll(value);
+      try {
+        const transaction = this.db.transaction(this.storeName, "readonly");
+        const store = transaction.objectStore(this.storeName);
+        const index = store.index(indexName);
+        const request = index.getAll(value);
 
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(new Error("Transaction aborted"));
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      } catch (error) {
+        // Catch synchronous errors (e.g., index doesn't exist)
+        reject(error);
+      }
     });
   }
 
@@ -204,6 +223,8 @@ export class DBStore<T extends { id: string }> {
       const store = transaction.objectStore(this.storeName);
       const request = store.count();
 
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(new Error("Transaction aborted"));
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });

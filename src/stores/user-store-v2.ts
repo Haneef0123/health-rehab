@@ -208,12 +208,23 @@ export const useUserStore = create<UserState>()(
           const user = get().user;
           if (user) {
             const store = await dbManager.getStore<User>(STORES.USERS);
-            if (!store) return;
+            if (!store) {
+              set({ error: "Database not available" });
+              return;
+            }
 
             await store.put(user);
+            // Clear any previous sync errors on success
+            if (get().error?.includes("sync")) {
+              set({ error: null });
+            }
           }
         } catch (error) {
+          const errorMessage = error instanceof Error
+            ? error.message
+            : "Failed to sync to IndexedDB";
           console.error("Failed to sync to IndexedDB:", error);
+          set({ error: `Sync error: ${errorMessage}` });
         }
       },
 

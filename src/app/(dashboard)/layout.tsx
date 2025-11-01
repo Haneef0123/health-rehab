@@ -24,7 +24,7 @@ export default function DashboardLayout({
   const { initializeStore: initializeMedication } = useMedicationStore();
 
   useEffect(() => {
-    // Initialize all store data on mount
+    // Initialize all store data on mount only
     const initializeStores = async () => {
       await Promise.all([
         initializeUser(),
@@ -36,13 +36,8 @@ export default function DashboardLayout({
     };
 
     initializeStores();
-  }, [
-    initializeUser,
-    initializeLogs,
-    initializeSessions,
-    initializeDiet,
-    initializeMedication,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - Zustand store functions are stable
 
   return (
     <>

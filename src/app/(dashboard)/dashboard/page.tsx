@@ -63,7 +63,8 @@ export default function DashboardPage() {
       return logDate.getTime() === today.getTime();
     });
     if (todayLogs.length === 0) return 0;
-    return todayLogs[todayLogs.length - 1].level;
+    const lastLog = todayLogs[todayLogs.length - 1];
+    return lastLog?.level ?? 0;
   }, [painLogs]);
 
   // Calculate today's exercise sessions
@@ -98,6 +99,9 @@ export default function DashboardPage() {
       firstHalf.reduce((sum, log) => sum + log.level, 0) / firstHalf.length;
     const secondAvg =
       secondHalf.reduce((sum, log) => sum + log.level, 0) / secondHalf.length;
+
+    // Avoid division by zero - if firstAvg is 0, return 0
+    if (firstAvg === 0) return 0;
 
     return Math.round(((firstAvg - secondAvg) / firstAvg) * 100);
   }, [painLogs]);

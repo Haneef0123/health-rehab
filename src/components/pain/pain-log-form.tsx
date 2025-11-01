@@ -11,15 +11,34 @@ import { PainScaleSelector } from "./pain-scale-selector";
 import { usePainStore, useUserStore } from "@/stores";
 import { USER_ID_FALLBACK } from "@/lib/constants";
 import { X } from "lucide-react";
+import type { PainLocation, PainType } from "@/types/pain";
 
 const painLogSchema = z.object({
-  level: z.number().min(0).max(10),
-  location: z.array(z.string()).min(1, "Please select at least one location"),
-  type: z.array(z.string()).optional(),
-  triggers: z.array(z.string()).optional(),
-  activities: z.string().optional(),
-  medications: z.string().optional(),
-  notes: z.string().optional(),
+  level: z.number().int().min(0).max(10),
+  location: z.array(z.enum([
+    "neck",
+    "upper-back",
+    "mid-back",
+    "lower-back",
+    "shoulders",
+    "arms",
+    "head",
+    "legs"
+  ] as const)).min(1, "Please select at least one location"),
+  type: z.array(z.enum([
+    "sharp",
+    "dull",
+    "aching",
+    "burning",
+    "stabbing",
+    "tingling",
+    "numbness",
+    "stiffness"
+  ] as const)).optional(),
+  triggers: z.array(z.string().max(100)).optional(),
+  activities: z.string().max(500).optional(),
+  medications: z.string().max(500).optional(),
+  notes: z.string().max(1000).optional(),
 });
 
 type PainLogFormData = z.infer<typeof painLogSchema>;
@@ -29,22 +48,23 @@ interface PainLogFormProps {
   onSuccess?: () => void;
 }
 
-const COMMON_LOCATIONS = [
-  "Neck",
-  "Upper Back",
-  "Lower Back",
-  "Shoulders",
-  "Head",
-  "Arms",
+// Map display names to typed values
+const LOCATION_OPTIONS: Array<{ label: string; value: PainLocation }> = [
+  { label: "Neck", value: "neck" },
+  { label: "Upper Back", value: "upper-back" },
+  { label: "Lower Back", value: "lower-back" },
+  { label: "Shoulders", value: "shoulders" },
+  { label: "Head", value: "head" },
+  { label: "Arms", value: "arms" },
 ];
 
-const COMMON_TYPES = [
-  "Sharp",
-  "Dull",
-  "Aching",
-  "Burning",
-  "Tingling",
-  "Numbness",
+const TYPE_OPTIONS: Array<{ label: string; value: PainType }> = [
+  { label: "Sharp", value: "sharp" },
+  { label: "Dull", value: "dull" },
+  { label: "Aching", value: "aching" },
+  { label: "Burning", value: "burning" },
+  { label: "Tingling", value: "tingling" },
+  { label: "Numbness", value: "numbness" },
 ];
 
 const COMMON_TRIGGERS = [
@@ -63,8 +83,8 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
   const { user } = useUserStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>([]);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<PainLocation[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<PainType[]>([]);
 
   const {
     register,
@@ -87,7 +107,7 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
 
   const painLevel = watch("level");
 
-  const toggleLocation = (location: string) => {
+  const toggleLocation = (location: PainLocation) => {
     const newLocations = selectedLocations.includes(location)
       ? selectedLocations.filter((l) => l !== location)
       : [...selectedLocations, location];
@@ -95,7 +115,7 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
     setValue("location", newLocations);
   };
 
-  const toggleType = (type: string) => {
+  const toggleType = (type: PainType) => {
     const newTypes = selectedTypes.includes(type)
       ? selectedTypes.filter((t) => t !== type)
       : [...selectedTypes, type];
@@ -117,11 +137,11 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
       await addLog({
         userId: user?.id ?? USER_ID_FALLBACK,
         level: data.level,
-        location: data.location as any[], // Type assertion for now
-        type: data.type as any[], // Type assertion for now
-        triggers: data.triggers || [],
-        activity: data.activities || undefined,
-        notes: data.notes || undefined,
+        location: data.location,
+        type: data.type ?? [],
+        triggers: data.triggers ?? [],
+        activity: data.activities,
+        notes: data.notes,
         timestamp: new Date(),
         updatedAt: new Date(),
       });
@@ -173,17 +193,17 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
           Location <span className="text-accent-500">*</span>
         </Label>
         <div className="mt-2 flex flex-wrap gap-2">
-          {COMMON_LOCATIONS.map((location) => (
+          {LOCATION_OPTIONS.map((option) => (
             <Button
-              key={location}
+              key={option.value}
               type="button"
               variant={
-                selectedLocations.includes(location) ? "default" : "outline"
+                selectedLocations.includes(option.value) ? "default" : "outline"
               }
               size="sm"
-              onClick={() => toggleLocation(location)}
+              onClick={() => toggleLocation(option.value)}
             >
-              {location}
+              {option.label}
             </Button>
           ))}
         </div>
@@ -198,15 +218,15 @@ export function PainLogForm({ onClose, onSuccess }: PainLogFormProps) {
       <div>
         <Label htmlFor="type">Pain Type</Label>
         <div className="mt-2 flex flex-wrap gap-2">
-          {COMMON_TYPES.map((type) => (
+          {TYPE_OPTIONS.map((option) => (
             <Button
-              key={type}
+              key={option.value}
               type="button"
-              variant={selectedTypes.includes(type) ? "default" : "outline"}
+              variant={selectedTypes.includes(option.value) ? "default" : "outline"}
               size="sm"
-              onClick={() => toggleType(type)}
+              onClick={() => toggleType(option.value)}
             >
-              {type}
+              {option.label}
             </Button>
           ))}
         </div>

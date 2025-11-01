@@ -8,6 +8,7 @@ import type {
   DietaryRestrictions,
 } from "@/types/diet";
 import { dbManager, STORES } from "@/lib/db";
+import { filterMeals, filterWaterLogs } from "@/lib/type-guards";
 
 interface DietState {
   // State
@@ -138,19 +139,21 @@ export const useDietStore = create<DietState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const store = await dbManager.getStore<any>(STORES.DIET_ENTRIES);
+      const store = await dbManager.getStore<Meal | WaterLog>(STORES.DIET_ENTRIES);
       if (!store) {
-        set({ meals: [], isLoading: false });
+        set({
+          meals: [],
+          isLoading: false,
+          error: "Database not available"
+        });
         return;
       }
 
       // Get all entries for the user
       const allEntries = await store.getAllByIndex("userId", "user-1");
 
-      // Filter only Meal entries using discriminator
-      const allMeals = allEntries.filter(
-        (entry: any) => entry.entryType === "meal"
-      ) as Meal[];
+      // Filter and validate only Meal entries using type guard
+      const allMeals = filterMeals(allEntries);
 
       const targetDate = new Date(date);
       targetDate.setHours(0, 0, 0, 0);
@@ -416,13 +419,17 @@ export const useDietStore = create<DietState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const store = await dbManager.getStore<any>(STORES.DIET_ENTRIES);
+      const store = await dbManager.getStore<Meal | WaterLog>(STORES.DIET_ENTRIES);
       if (!store) {
-        set({ waterLogs: [], isLoading: false });
+        set({
+          waterLogs: [],
+          isLoading: false,
+          error: "Database not available"
+        });
         return;
       }
 
-      let allEntries: any[];
+      let allEntries: unknown[];
 
       if (startDate && endDate) {
         const range = IDBKeyRange.bound(
@@ -434,10 +441,8 @@ export const useDietStore = create<DietState>((set, get) => ({
         allEntries = await store.getAllByIndex("userId", "user-1");
       }
 
-      // Filter only WaterLog entries using discriminator
-      const logs = allEntries.filter(
-        (entry: any) => entry.entryType === "water"
-      ) as WaterLog[];
+      // Filter and validate only WaterLog entries using type guard
+      const logs = filterWaterLogs(allEntries);
 
       // Sort by date descending
       logs.sort(
