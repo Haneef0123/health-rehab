@@ -74,11 +74,11 @@ Excludes build artifacts, logs, and sensitive files from Claude's context.
 
 #### 2.1 Testing Dependencies
 ```bash
-pnpm add -D vitest@latest @vitest/ui@latest @vitest/coverage-v8@latest
-pnpm add -D @testing-library/react@latest @testing-library/jest-dom@latest
-pnpm add -D @testing-library/user-event@latest
-pnpm add -D @playwright/test@latest
-pnpm add -D jsdom@latest happy-dom@latest
+npm install -D vitest@latest @vitest/ui@latest @vitest/coverage-v8@latest
+npm install -D @testing-library/react@latest @testing-library/jest-dom@latest
+npm install -D @testing-library/user-event@latest
+npm install -D @playwright/test@latest
+npm install -D jsdom@latest happy-dom@latest
 ```
 
 #### 2.2 Configuration Files
@@ -132,13 +132,13 @@ pnpm add -D jsdom@latest happy-dom@latest
 
 #### 3.1 Linting & Formatting Dependencies
 ```bash
-pnpm add -D eslint@latest @typescript-eslint/parser@latest
-pnpm add -D @typescript-eslint/eslint-plugin@latest
-pnpm add -D eslint-config-next@latest
-pnpm add -D eslint-plugin-react@latest eslint-plugin-react-hooks@latest
-pnpm add -D eslint-plugin-jsx-a11y@latest
-pnpm add -D prettier@latest prettier-plugin-tailwindcss@latest
-pnpm add -D lint-staged@latest husky@latest
+npm install -D eslint@latest @typescript-eslint/parser@latest
+npm install -D @typescript-eslint/eslint-plugin@latest
+npm install -D eslint-config-next@latest
+npm install -D eslint-plugin-react@latest eslint-plugin-react-hooks@latest
+npm install -D eslint-plugin-jsx-a11y@latest
+npm install -D prettier@latest prettier-plugin-tailwindcss@latest
+npm install -D lint-staged@latest husky@latest
 ```
 
 #### 3.2 Configuration Files
@@ -213,7 +213,7 @@ module.exports = {
 ```
 
 #### 4.2 CI Pipeline Features (`ci.yml`)
-- Dependency caching (pnpm)
+- Dependency caching (npm)
 - Parallel jobs (lint, test, typecheck, build)
 - Test coverage reporting to Codecov
 - Playwright E2E tests with retries
@@ -315,10 +315,10 @@ module.exports = {
 
 #### 6.1 Component Documentation (Storybook)
 ```bash
-pnpm add -D storybook@latest @storybook/react@latest
-pnpm add -D @storybook/addon-essentials@latest
-pnpm add -D @storybook/addon-interactions@latest
-pnpm add -D @storybook/addon-a11y@latest
+npm install -D storybook@latest @storybook/react@latest
+npm install -D @storybook/addon-essentials@latest
+npm install -D @storybook/addon-interactions@latest
+npm install -D @storybook/addon-a11y@latest
 ```
 
 **Features:**
@@ -329,7 +329,7 @@ pnpm add -D @storybook/addon-a11y@latest
 
 #### 6.2 Performance Monitoring
 ```bash
-pnpm add @vercel/analytics web-vitals
+npm install @vercel/analytics web-vitals
 ```
 
 **Features:**
@@ -347,8 +347,8 @@ pnpm add @vercel/analytics web-vitals
 
 #### 6.4 Observability
 ```bash
-pnpm add @sentry/nextjs
-pnpm add pino pino-pretty
+npm install @sentry/nextjs
+npm install pino pino-pretty
 ```
 
 **Features:**

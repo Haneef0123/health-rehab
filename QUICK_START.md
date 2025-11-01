@@ -5,7 +5,7 @@ Use this guide when you onboard a new machine or reset the workspace. It mirrors
 ## 1. Prerequisites
 
 - **Node.js 20** (see `.nvmrc`)
-- **pnpm** (ships with Corepack; run `corepack enable` if needed)
+- **npm** (included with Node.js)
 - A modern browser (Chrome, Edge, or Safari) for IndexedDB support
 
 ## 2. Install & Run
@@ -19,11 +19,10 @@ cd health-rehab
 nvm use 20    # or install via asdf/volta if preferred
 
 # Install dependencies (one command, clean workspace)
-corepack enable
-pnpm install
+npm install
 
 # Launch the app
-pnpm dev
+npm run dev
 ```
 
 Visit **http://localhost:3000/dashboard**. The landing page redirects automatically.
@@ -33,7 +32,7 @@ Visit **http://localhost:3000/dashboard**. The landing page redirects automatica
 1. Open the dashboard and perform a full manual smoke test (pain log, exercise session, medication toggle).
 2. Make changes in a feature branch, keeping the domain safety rules from `AGENTS.md` front-of-mind.
 3. Add or update tests as you touch stores/components.
-4. Run `pnpm build` before you share results with Haneef.
+4. Run `npm run build` before you share results with Haneef.
 
 ## 4. Key project docs
 
@@ -46,8 +45,8 @@ If you rely on Codex, copy `.codex/config.template.toml` to `~/.codex/config.tom
 
 ## 5. Troubleshooting
 
-- **Build errors**: run `pnpm build` locally; resolve TypeScript issues before continuing.
+- **Build errors**: run `npm run build` locally; resolve TypeScript issues before continuing.
 - **IndexedDB issues**: clear browser storage for `http://localhost:3000` to reset seed data.
-- **Dependency drift**: install packages one at a time (`pnpm add <name>`) to keep diffs and failures obvious, per the constitution.
+- **Dependency drift**: install packages one at a time (`npm install <name>`) to keep diffs and failures obvious, per the constitution.
 
 You are now ready to iterate safely on the rehabilitation assistant. Take care of the medical disclaimers and keep the UX snappy. 💙

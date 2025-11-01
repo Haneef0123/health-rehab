@@ -7,19 +7,19 @@ Execute the full build verification pipeline to ensure code quality and deployab
 ## Build Pipeline Steps
 
 1. **Type Check**
-   - Run: `pnpm tsc --noEmit`
+   - Run: `npx tsc --noEmit`
    - Verify: Zero TypeScript errors
 
 2. **Lint Check** (when configured)
-   - Run: `pnpm lint`
+   - Run: `npm run lint`
    - Verify: Zero ESLint errors/warnings
 
 3. **Test Suite** (when configured)
-   - Run: `pnpm test`
+   - Run: `npm test`
    - Verify: All tests pass, coverage > 90%
 
 4. **Production Build**
-   - Run: `pnpm build`
+   - Run: `npm run build`
    - Verify: Build completes successfully
 
 5. **Bundle Size Check**

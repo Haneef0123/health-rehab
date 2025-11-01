@@ -389,7 +389,7 @@ async function savePainLog(log: PainLog) {
 - **Hosting**: Netlify
 - **CDN**: Netlify Edge
 - **Node Version**: 20.x LTS
-- **Package Manager**: pnpm (via Corepack)
+- **Package Manager**: npm (included with Node.js)
 
 ---
 
@@ -476,7 +476,7 @@ async function savePainLog(log: PainLog) {
 2. **Check Bundle Size**: Use https://bundlephobia.com
 3. **Verify TypeScript Support**: Must have types
 4. **Security Audit**: Check for vulnerabilities
-5. **Install One at a Time**: `pnpm add package-name`
+5. **Install One at a Time**: `npm install package-name`
 6. **Document Why**: Add comment in package.json
 
 ### Updating Dependencies
