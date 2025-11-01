@@ -26,25 +26,24 @@ A privacy-first **Next.js 15** dashboard that helps a single user (Haneef) log p
 git clone https://github.com/yourusername/health-rehab.git
 cd health-rehab
 
-# Use Node 20 (see .nvmrc), enable pnpm via Corepack
-corepack enable
-pnpm install
+# Use Node 20 (see .nvmrc)
+npm install
 
 # Launch the dashboard
-pnpm dev
+npm run dev
 ```
 
 Open **http://localhost:3000/dashboard**. The build is single-user and stores data locally; backend services and PostgreSQL integration are staged for a future milestone.
 
 ### Available scripts
 
-| Command       | Purpose                                               |
-| ------------- | ----------------------------------------------------- |
-| `pnpm dev`    | Run Next.js in development mode                       |
-| `pnpm build`  | Type-check and produce a production bundle (required before handoff) |
-| `pnpm start`  | Serve the production bundle locally                   |
+| Command          | Purpose                                               |
+| ---------------- | ----------------------------------------------------- |
+| `npm run dev`    | Run Next.js in development mode                       |
+| `npm run build`  | Type-check and produce a production bundle (required before handoff) |
+| `npm run start`  | Serve the production bundle locally                   |
 
-> Per the constitution, install or remove dependencies one at a time (`pnpm add <name>`). Avoid batch installs that mask failures.
+> Per the constitution, install or remove dependencies one at a time (`npm install <name>`). Avoid batch installs that mask failures.
 
 ## 📁 Project layout
 
@@ -77,9 +76,9 @@ This surfaces the canonical specs in `.specify/memory/` alongside the summary gu
 
 Before you declare a change complete:
 
-1. Respect the safety rules—no exercises or guidance that conflicts with Haneef’s diagnosed conditions.
+1. Respect the safety rules—no exercises or guidance that conflicts with Haneef's diagnosed conditions.
 2. Update or add tests (Vitest/Playwright) for modified behaviour.
-3. Run `pnpm build` and resolve all warnings/errors.
+3. Run `npm run build` and resolve all warnings/errors.
 4. Document user-facing changes in this README or `QUICK_START.md`.
 
 ## 🔭 Roadmap highlights
